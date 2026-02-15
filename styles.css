@@ -24,8 +24,6 @@
 *{box-sizing:border-box;}
 body{margin:0;background:var(--page-bg);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px;color:var(--navy);--accent:var(--blue);transition:background .3s ease,color .3s ease;}
 body.landing,body.hub,body.create-class{align-items:center;}
-.themeToggle{position:fixed;top:20px;right:20px;border:none;border-radius:50%;width:48px;height:48px;background:rgba(255,255,255,.85);box-shadow:0 15px 40px rgba(10,20,40,.15);font-size:1.5rem;cursor:pointer;z-index:90;}
-:root[data-theme="dark"] .themeToggle{background:rgba(16,25,53,.85);color:#fefefe;box-shadow:0 15px 40px rgba(0,0,0,.35);}
 .landingHero{width:min(1200px,100%);background:radial-gradient(circle at top,#f4f8ff,#eef2ff);border-radius:44px;padding:48px 64px;box-shadow:0 55px 120px rgba(15,30,72,.15);display:flex;gap:40px;align-items:center;position:relative;overflow:hidden;}
 .landingHero::after{content:\"\";position:absolute;width:420px;height:420px;background:rgba(28,91,255,.2);filter:blur(120px);top:-140px;right:-120px;z-index:0;}
 .heroCopy{flex:1;position:relative;z-index:1;text-align:left;}
