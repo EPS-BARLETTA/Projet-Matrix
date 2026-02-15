@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPS Matrix – Évaluation</title>
+  <script>
+    (function(){
+      try{
+        const stored = localStorage.getItem('eps.matrix.theme');
+        if(stored){ document.documentElement.dataset.theme = stored; }
+      }catch(_e){}
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="theme.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="prompt-modal.js"></script>
+  <script defer src="evaluation.js"></script>
+</head>
+<body>
+  <button class="themeToggle" id="themeToggle" aria-label="Mode nuit">🌙</button>
+  <main class="card-full" style="gap:24px;">
+    <header class="app">
+      <div>
+        <h2 id="evalTitle">Évaluation</h2>
+        <p id="evalMeta" class="dragHint"></p>
+      </div>
+      <div class="navButtons">
+        <a class="btn secondary" id="backClass" href="classes.html">← Retour classe</a>
+        <button class="btn secondary" id="btnConfigure">Configurer</button>
+        <button class="btn secondary" id="btnScoring">Notation</button>
+        <button class="btn secondary" id="btnToggleNote">Afficher la note</button>
+        <button class="btn secondary" id="btnExportCsv">Sauvegarder CSV</button>
+        <label class="btn secondary" style="cursor:pointer;">
+          Importer CSV
+          <input type="file" id="inputImportCsv" accept=".csv,text/csv" hidden />
+        </label>
+        <button class="btn secondary" id="btnExportPdf">PDF</button>
+        <button class="btn secondary" id="btnTableOnly">Plein écran</button>
+        <a class="btn secondary helpLink" href="help.html" target="_blank" rel="noopener">🛈 Mode d’emploi</a>
+      </div>
+    </header>
+    <div class="stats" id="evalStats"></div>
+    <section class="terrainPanel" id="terrainPanel">
+      <div class="terrainPanelHeader">
+        <div class="terrainToggleRow">
+          <button class="btn secondary" type="button" id="btnToggleTerrainMode">Activer le mode terrain</button>
+          <p class="muted smallText" id="terrainModeHint">Les terrains utilisent les groupes (G1 = Terrain 1).</p>
+        </div>
+        <div class="terrainConfig">
+          <label>Nombre de terrains
+            <input type="number" id="terrainCountInput" min="1" max="20" value="4" />
+          </label>
+          <button class="btn secondary" type="button" id="btnInitTerrains">Initialiser le classement</button>
+        </div>
+      </div>
+      <p class="muted smallText" id="terrainDisabledHint">Active le mode terrain pour générer automatiquement les cartes à partir des groupes.</p>
+      <div class="terrainGrid" id="terrainGrid"></div>
+      <div class="terrainMatches">
+        <h4>Matches récents</h4>
+        <ul id="terrainMatchesList"></ul>
+      </div>
+    </section>
+    <section class="rotationPanel" id="rotationPanel">
+      <div class="sectionHeader">
+        <div>
+          <h3>Rotation en cours</h3>
+          <p class="muted"><span id="rotationRoundLabel">Rotation #1</span> • Saisis les scores puis passe à la rotation suivante.</p>
+        </div>
+        <div class="rotationActions">
+          <button class="btn secondary" type="button" id="btnUndoRotation" disabled>Annuler la dernière rotation</button>
+          <button class="btn primary" type="button" id="btnNextRotation" disabled>Rotation suivante</button>
+        </div>
+      </div>
+      <div id="rotationMatches" class="rotationMatches"></div>
+    </section>
+    <aside class="rotationReadyPopup hidden" id="rotationReadyPopup">
+      <div class="popupCard">
+        <div>
+          <p class="muted tinyCaps">Scores validés</p>
+          <strong id="rotationReadyTitle">Tous les terrains sont prêts</strong>
+          <p class="muted" id="rotationReadyDesc">Tu peux lancer la rotation suivante ou revoir le classement avant de valider.</p>
+        </div>
+        <div class="popupActions">
+          <button class="btn secondary" type="button" id="btnReadyReview">↺ Retour aux résultats</button>
+          <button class="btn primary" type="button" id="btnReadyNext">Rotation suivante</button>
+        </div>
+      </div>
+    </aside>
+    <div class="tableWrapper">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <section class="resultsPanel hidden" id="resultsPanel">
+      <div class="sectionHeader">
+        <h3>Mode terrain – Résultats</h3>
+        <button class="btn secondary" type="button" id="btnExportResultsCsv">Exporter les résultats</button>
+      </div>
+      <div class="tableWrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Rang</th>
+              <th>Élève</th>
+              <th>Départ</th>
+              <th>Terrain actuel</th>
+              <th>Matchs</th>
+              <th>Gagnés</th>
+              <th>Perdus</th>
+              <th>Points</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="configModal" role="dialog" aria-modal="true">
+    <div class="modalCard large">
+      <div class="modalHeader">
+        <h2>Configurer la grille</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <p class="muted">Sélectionne les champs de base à afficher puis compose tes critères.</p>
+      <section class="baseFieldsPanel">
+        <h3>Champs de base</h3>
+        <div id="baseFieldOptions" class="baseFieldGrid"></div>
+      </section>
+      <section>
+        <h3>Critères</h3>
+        <div id="configList" class="criteriaList"></div>
+      </section>
+      <div class="actions modalActions">
+        <button class="btn secondary" id="btnAddCriterion" type="button">+ Ajouter un critère</button>
+        <button class="btn secondary" id="btnChatGPT" type="button">Pense-bête ChatGPT</button>
+        <span class="flex-fill"></span>
+        <button class="btn secondary" data-close-modal type="button">Annuler</button>
+        <button class="btn primary" id="btnSaveCriteria" type="button">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="scoringModal" role="dialog" aria-modal="true">
+    <div class="modalCard large">
+      <div class="modalHeader">
+        <h2>Notation</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <p class="muted">Attribue des points à chaque option. Ces valeurs alimentent automatiquement la note sur 20.</p>
+      <div id="scoringList" class="criteriaList"></div>
+      <div class="actions modalActions">
+        <span class="flex-fill"></span>
+        <button class="btn secondary" data-close-modal type="button">Annuler</button>
+        <button class="btn primary" id="btnSaveScoring" type="button">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="chatgptModal" role="dialog" aria-modal="true">
+    <div class="modalCard">
+      <div class="modalHeader">
+        <h2>Pense-bête ChatGPT</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <p class="muted">Copie le prompt ci-dessous pour générer des critères conformes aux derniers programmes EPS.</p>
+      <textarea id="chatgptPrompt" style="width:100%;min-height:160px;border-radius:18px;border:1px solid var(--line);padding:16px;font-family:inherit;"></textarea>
+      <div class="actions" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn secondary" id="btnCopyPrompt" type="button">Copier le prompt</button>
+        <button class="btn primary" id="btnOpenChatGPT" type="button">Ouvrir chatgpt.com</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="playerModal" role="dialog" aria-modal="true">
+    <div class="modalCard">
+      <div class="modalHeader">
+        <h2 id="playerModalTitle">Fiche terrain</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <p class="muted" id="playerModalMeta"></p>
+      <label>Note libre
+        <textarea id="playerNoteInput" style="width:100%;min-height:140px;border-radius:16px;border:1px solid var(--line);padding:12px;font-family:inherit;"></textarea>
+      </label>
+      <label>Rôle
+        <select id="playerRoleSelect">
+          <option value="player">Joueur / Joueuse</option>
+          <option value="ref">Arbitre</option>
+        </select>
+      </label>
+      <div class="actions modalActions">
+        <span class="flex-fill"></span>
+        <button class="btn secondary" type="button" data-close-modal>Fermer</button>
+        <button class="btn primary" type="button" id="btnSavePlayer">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="studentSummaryModal" role="dialog" aria-modal="true">
+    <div class="modalCard large">
+      <div class="modalHeader">
+        <h2 id="studentSummaryTitle">Bilan élève</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <p class="muted" id="studentSummaryMeta"></p>
+      <div class="studentSummaryStats" id="studentSummaryStats"></div>
+      <div class="studentMatches">
+        <h4>Matches</h4>
+        <ul id="studentMatchesList"></ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

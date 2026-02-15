@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPS Matrix – Bloc note</title>
+  <script>
+    (function(){
+      try{
+        const stored = localStorage.getItem('eps.matrix.theme');
+        if(stored){ document.documentElement.dataset.theme = stored; }
+      }catch(_e){}
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="theme.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="notes.js"></script>
+</head>
+<body class="notes">
+  <button class="themeToggle" id="themeToggle" aria-label="Mode nuit">🌙</button>
+  <main class="card-full" style="gap:24px;">
+    <header class="app">
+      <div>
+        <h2 id="notesTitle">Bloc note</h2>
+        <p id="notesMeta" class="dragHint"></p>
+      </div>
+      <div class="navButtons">
+        <a class="btn secondary" id="backClass" href="classes.html">← Retour classe</a>
+        <button class="btn secondary" id="btnExportNotes" type="button">Exporter JSON</button>
+        <a class="btn secondary helpLink" href="help.html" target="_blank" rel="noopener">🛈 Mode d’emploi</a>
+      </div>
+    </header>
+    <section class="notesLayout">
+      <div class="cardSection">
+        <h3>Tableau d'observations</h3>
+        <p class="muted">Une ligne d'écriture libre par élève (auto-sauvegarde).</p>
+        <div class="tableWrapper">
+          <table>
+            <thead><tr><th>Prénom</th><th>Note</th></tr></thead>
+            <tbody id="notesBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="cardSection">
+        <div class="sectionHeader">
+          <div>
+            <h3>Mur de post-it</h3>
+            <p class="muted">Ajoute des pense-bêtes colorés.</p>
+          </div>
+          <div class="navButtons">
+            <button class="btn secondary" id="btnAddSticky" type="button">+ Post-it</button>
+            <button class="btn secondary" id="btnClearStickies" type="button">Effacer</button>
+          </div>
+        </div>
+        <div id="stickiesBoard" class="stickiesBoard"></div>
+      </div>
+      <div class="cardSection">
+        <div class="sectionHeader">
+          <div>
+            <h3>Mode stylet</h3>
+            <p class="muted">Écris à main levée (Apple Pencil compatible).</p>
+          </div>
+          <div class="navButtons">
+            <button class="btn secondary" id="btnFullscreenSketch" type="button">Plein écran</button>
+            <button class="btn secondary" id="btnExportSketch" type="button">Archiver (PNG)</button>
+            <button class="btn secondary" id="btnClearSketch" type="button">Effacer</button>
+          </div>
+        </div>
+        <div class="sketchToolbar">
+          <div id="sketchTabs" class="sketchTabs"></div>
+          <div class="navButtons">
+            <button class="btn secondary" id="btnAddSketchPage" type="button">+ Page stylet</button>
+            <button class="btn secondary" id="btnRenameSketchPage" type="button">Renommer</button>
+            <button class="btn secondary danger" id="btnDeleteSketchPage" type="button">Supprimer</button>
+          </div>
+        </div>
+        <div class="sketchOptions">
+          <div class="sketchToolsRow">
+            <div class="sketchToolButtons">
+              <button class="btn secondary active" id="btnToolPen" type="button">Stylet</button>
+              <button class="btn secondary" id="btnToolEraser" type="button">Gomme</button>
+            </div>
+            <div class="sketchActions">
+              <button class="btn secondary hidden" id="btnExitFullscreen" type="button">Quitter plein écran</button>
+            </div>
+          </div>
+          <div class="sketchPalettes">
+            <div>
+              <p class="muted smallTitle">Couleur</p>
+              <div id="sketchColorPalette" class="sketchPalette"></div>
+            </div>
+            <div>
+              <p class="muted smallTitle">Épaisseur</p>
+              <div id="sketchSizePalette" class="sketchSizes"></div>
+            </div>
+          </div>
+        </div>
+        <div class="sketchShell" id="sketchShell">
+          <canvas id="sketchCanvas" width="900" height="360"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

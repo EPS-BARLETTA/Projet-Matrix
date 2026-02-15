@@ -1,208 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calcul de VMA</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-            max-width: 600px;
-            margin: auto;
-        }
-        input, button {
-            font-size: 18px;
-            margin: 10px 0;
-            padding: 10px;
-            width: 100%;
-            max-width: 200px;
-        }
-        button {
-            cursor: pointer;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 100px;
-            height: 100px;
-            margin: 5px;
-        }
-        .btn-start { background-color: #4CAF50; }
-        .btn-plot { background-color: #2196F3; }
-        .btn-download { background-color: #FF9800; }
-        .btn-reset { background-color: #f44336; }
-        .input-row {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .info-box {
-            border: 2px solid green;
-            padding: 10px;
-            margin: 20px 0;
-            font-weight: bold;
-            color: green;
-        }
-        .results, #finalSummary {
-            margin-top: 20px;
-            font-size: 16px;
-        }
-        #resultsLog {
-            margin: 10px 0;
-        }
-        label { display: block; margin-top: 10px; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPS Matrix</title>
+  <script>
+    (function(){
+      try{
+        const stored = localStorage.getItem('eps.matrix.theme');
+        if(stored){ document.documentElement.dataset.theme = stored; }
+      }catch(_e){}
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="theme.js"></script>
 </head>
-<body>
-
-    <h1>Calcul de la VMA</h1>
-
-    <input type="text" id="runnerName" placeholder="Nom du coureur" required>
-    <input type="text" id="observerName" placeholder="Nom de l'observateur" required>
-
-    <div class="input-row">
-        <div>
-            <label for="runnerVMA">VMA du coureur (km/h) :</label>
-            <input type="number" id="runnerVMA" placeholder="VMA du coureur" required step="0.5">
-        </div>
-        <div>
-            <label for="targetPercentage">Pourcentage de la VMA cible (%) :</label>
-            <input type="number" id="targetPercentage" placeholder="Ex: 90" required step="0.5">
-        </div>
+<body class="landing simpleLanding">
+  <button class="themeToggle" id="themeToggle" aria-label="Mode nuit">🌙</button>
+  <main class="landingCenter">
+    <h1>EPS Matrix</h1>
+    <p class="lead">Crée, personnalise et centralise tes évaluations par classe et champs d'apprentissage.</p>
+    <div class="ctaRow" style="justify-content:center;">
+      <a class="btn primary" href="hub.html">Démarrer</a>
+      <button class="btn secondary" id="btnLandingManual">Mode d'emploi</button>
     </div>
-
-    <label for="duration">Durée de la course (en minutes, multiples de 1:30) :</label>
-    <input type="number" id="duration" min="1.5" step="1.5" value="3">
-
-    <div id="infoBox" class="info-box" style="display:none;"></div>
-
-    <button class="btn-start" onclick="startRace()">Démarrer</button>
-
-    <div id="controlSection" style="display:none;">
-        <button class="btn-plot" onclick="addPlot()">Passer un plot</button>
-        <button class="btn-download" onclick="downloadResults()">Télécharger</button>
-        <button class="btn-reset" onclick="resetRace()">Réinitialiser</button>
-        
-        <p>Temps écoulé : <span id="timeElapsed">0:00</span></p>
-        <p>Plots passés : <span id="plotCount">0</span></p>
-        <div id="resultsLog"></div>
-        <div id="finalSummary" style="display:none;"></div>
+  </main>
+  <div class="modal hidden" id="landingManual">
+    <div class="modalCard">
+      <h2>Mode d'emploi</h2>
+      <div class="manualBlocks">
+        <div class="manualBlock" data-tone="blue">
+          <h3>1. Préparer vos classes</h3>
+          <p>Depuis « Créer une classe », renseigne nom, site, couleur puis colle la liste : seul le prénom + initiale est gardé automatiquement.</p>
+        </div>
+        <div class="manualBlock" data-tone="green">
+          <h3>2. Choisir un mode</h3>
+          <p>Dans « Accéder à mes classes », ouvre le dossier désiré, sélectionne un champ d’apprentissage (CA1 à CA5) ou le Bloc note, puis clique sur « Créer une évaluation ».</p>
+        </div>
+        <div class="manualBlock" data-tone="orange">
+          <h3>3. Configurer & saisir</h3>
+          <ul>
+            <li>Dans la page Évaluation : onglet « Configurer » pour activer les champs, ajouter vos critères, regrouper les élèves.</li>
+            <li>« Notation » définit les points attribués à chaque option.</li>
+            <li>Export CSV/PDF à tout moment, puis re-import possible sur la même grille.</li>
+          </ul>
+        </div>
+        <div class="manualBlock" data-tone="pink">
+          <h3>4. Raccourcis utiles</h3>
+          <p>Mode nuit ☾, plein écran pour l’iPad, bloc note pour prises rapides et sauvegarde locale automatique.</p>
+        </div>
+      </div>
+      <div class="actions" style="text-align:right;">
+        <button class="btn secondary" onclick="document.getElementById('landingManual').classList.add('hidden')">Fermer</button>
+      </div>
     </div>
-
-    <script>
-        let duration, interval, timeElapsed = 0, plotCount = 0, results = [], outsideTargetCount = 0;
-
-        function startRace() {
-            const runnerName = document.getElementById("runnerName").value;
-            const observerName = document.getElementById("observerName").value;
-            const runnerVMA = parseFloat(document.getElementById("runnerVMA").value);
-            const targetPercentage = parseFloat(document.getElementById("targetPercentage").value);
-
-            if (!runnerName || !observerName || isNaN(runnerVMA) || isNaN(targetPercentage)) {
-                alert("Veuillez remplir toutes les informations avant de démarrer la course.");
-                return;
-            }
-
-            duration = parseFloat(document.getElementById("duration").value) * 60;
-            plotCount = 0;
-            results = [`Coureur : ${runnerName}, Observateur : ${observerName}`];
-            timeElapsed = 0;
-            outsideTargetCount = 0;
-
-            const targetVMA = (runnerVMA * (targetPercentage / 100)).toFixed(2);
-            const expectedPlots = Math.round(targetVMA * 1.5 / 0.5);  // Chaque plot correspond à 0.5 km/h
-
-            document.getElementById("infoBox").style.display = "block";
-            document.getElementById("infoBox").textContent = `À ${targetPercentage}% de la VMA (${targetVMA} km/h), le coureur doit passer ${expectedPlots} plots par 1:30.`;
-            document.getElementById("controlSection").style.display = "block";
-            document.getElementById("plotCount").textContent = plotCount;
-            document.getElementById("timeElapsed").textContent = formatTime(0);
-            document.getElementById("resultsLog").innerHTML = "";
-            document.getElementById("finalSummary").style.display = "none";
-
-            interval = setInterval(updateTime, 1000);
-        }
-
-        function updateTime() {
-            timeElapsed++;
-            document.getElementById("timeElapsed").textContent = formatTime(timeElapsed);
-
-            if (timeElapsed % 90 === 0) {
-                calculateVMA();
-            }
-
-            if (timeElapsed >= duration) {
-                clearInterval(interval);
-                displayFinalSummary();
-                alert("Course terminée !");
-            }
-        }
-
-        function addPlot() {
-            plotCount++;
-            document.getElementById("plotCount").textContent = plotCount;
-        }
-
-        function calculateVMA() {
-            const runnerVMA = parseFloat(document.getElementById("runnerVMA").value);
-            const targetPercentage = parseFloat(document.getElementById("targetPercentage").value);
-            const targetVMA = runnerVMA * (targetPercentage / 100);
-            const expectedPlots = Math.round(targetVMA * 1.5 / 0.5); // Chaque plot est 0.5 km/h
-            const achievedVMA = (plotCount * 0.5) / 1.5 * 3.6;
-
-            const speedDiff = Math.abs(achievedVMA - targetVMA);
-            if (speedDiff > 0.5) outsideTargetCount++;
-
-            const message = `Après ${formatTime(timeElapsed)} : ${achievedVMA.toFixed(2)} km/h avec ${plotCount} plots (Écart : ${speedDiff.toFixed(2)} km/h)`;
-            document.getElementById("resultsLog").innerHTML += `<p>${message}</p>`;
-            results.push(message);
-            plotCount = 0; // Réinitialiser le compteur de plots pour le prochain 1:30
-        }
-
-        function displayFinalSummary() {
-            const avgVMA = results.reduce((sum, result) => sum + parseFloat(result.match(/(\d+\.\d+) km\/h/)[1]), 0) / results.length;
-            document.getElementById("finalSummary").style.display = "block";
-            document.getElementById("finalSummary").textContent = `Bilan : Vitesse moyenne ${avgVMA.toFixed(2)} km/h. En dehors de la cible ${outsideTargetCount} fois.`;
-        }
-
-        function downloadResults() {
-            const blob = new Blob([results.join("\n")], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "resultats_vma.txt";
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function resetRace() {
-            clearInterval(interval);
-            timeElapsed = 0;
-            plotCount = 0;
-            results = [];
-            outsideTargetCount = 0;
-
-            document.getElementById("timeElapsed").textContent = formatTime(timeElapsed);
-            document.getElementById("plotCount").textContent = plotCount;
-            document.getElementById("resultsLog").innerHTML = "";
-            document.getElementById("finalSummary").style.display = "none";
-            document.getElementById("infoBox").style.display = "none";
-            document.getElementById("controlSection").style.display = "none";
-
-            // Réinitialiser les champs de saisie
-            document.getElementById("runnerName").value = "";
-            document.getElementById("observerName").value = "";
-            document.getElementById("runnerVMA").value = "";
-                        document.getElementById("targetPercentage").value = "";
-            document.getElementById("duration").value = "3"; // Réinitialiser à 3 minutes par défaut
-        }
-
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-        }
-    </script>
+  </div>
+  <script>
+    document.getElementById('btnLandingManual').addEventListener('click', ()=>{
+      document.getElementById('landingManual').classList.remove('hidden');
+    });
+  </script>
 </body>
 </html>
