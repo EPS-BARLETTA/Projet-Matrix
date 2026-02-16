@@ -32,24 +32,105 @@
       </div>
     </header>
     <div class="stats" id="evalStats"></div>
-    <section class="terrainPanel" id="terrainPanel">
-      <div class="terrainPanelHeader">
-        <div class="terrainToggleRow">
-          <button class="btn secondary" type="button" id="btnToggleTerrainMode">Activer le mode terrain</button>
-          <p class="muted smallText" id="terrainModeHint">Les terrains utilisent les groupes (G1 = Terrain 1).</p>
-        </div>
-        <div class="terrainConfig">
-          <label>Nombre de terrains
-            <input type="number" id="terrainCountInput" min="1" max="20" value="4" />
-          </label>
-          <button class="btn secondary" type="button" id="btnInitTerrains">Initialiser le classement</button>
+    <section class="modeSection">
+      <div class="modeBar" id="modeBar">
+        <button class="modeChip" type="button" data-mode-btn="terrain">Raquettes</button>
+        <button class="modeChip" type="button" data-mode-btn="rope">Cordée</button>
+        <button class="modeChip" type="button" data-mode-btn="team">Sport co</button>
+        <button class="modeChip" type="button" data-mode-btn="collective">Collectif</button>
+      </div>
+      <div class="modePanel" id="panelTerrain">
+        <section class="terrainPanel" id="terrainPanel">
+          <div class="terrainPanelHeader">
+            <div class="terrainToggleRow">
+              <button class="btn secondary" type="button" id="btnToggleTerrainMode">Activer le mode terrain</button>
+              <p class="muted smallText" id="terrainModeHint">Les terrains utilisent les groupes (G1 = Terrain 1).</p>
+            </div>
+            <div class="terrainConfig">
+              <label>Nombre de terrains
+                <input type="number" id="terrainCountInput" min="1" max="20" value="4" />
+              </label>
+              <button class="btn secondary" type="button" id="btnInitTerrains">Initialiser le classement</button>
+            </div>
+          </div>
+          <div class="terrainContent" id="terrainContent">
+            <p class="muted smallText" id="terrainDisabledHint">Active le mode terrain pour générer automatiquement les cartes à partir des groupes.</p>
+            <div class="terrainGrid" id="terrainGrid"></div>
+            <div class="terrainMatches">
+              <h4>Matches récents</h4>
+              <ul id="terrainMatchesList"></ul>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="modePanel hidden" id="panelRope">
+        <section class="ropePanel" id="ropePanel">
+          <div class="sectionHeader ropeHeader">
+            <div>
+              <h3>Mode cordée</h3>
+              <p class="muted smallText">Escalade – rôles et observables</p>
+            </div>
+            <button class="btn secondary" type="button" id="btnToggleRopeMode">Activer le mode cordée</button>
+          </div>
+          <div class="ropeCompact" id="ropeCompactHint">
+            <p class="muted smallText">Prépare tes cordées et assigne les rôles grimpeur/assureurs. Active uniquement quand nécessaire.</p>
+          </div>
+          <div class="ropeContent hidden" id="ropeContent">
+            <div class="ropeSettingsRow">
+              <label class="ropeSelectLabel">
+                Taille de cordée
+                <select id="ropeSizeSelect">
+                  <option value="2">Cordée de 2</option>
+                  <option value="3">Cordée de 3</option>
+                </select>
+              </label>
+              <p class="muted smallText">Phase 1 : fondations data, observables et paramètres.</p>
+            </div>
+            <div class="ropeRoles">
+              <article class="ropeRoleCard" data-role-card="climber">
+                <div>
+                  <h4>Grimpeur</h4>
+                  <p class="muted smallText"><span data-role-count="climber">0 observable</span></p>
+                </div>
+                <button class="btn secondary" type="button" data-role-config="climber">Configurer</button>
+              </article>
+              <article class="ropeRoleCard" data-role-card="belayerTopRope">
+                <div>
+                  <h4>Assureur moulinette</h4>
+                  <p class="muted smallText"><span data-role-count="belayerTopRope">0 observable</span></p>
+                </div>
+                <button class="btn secondary" type="button" data-role-config="belayerTopRope">Configurer</button>
+              </article>
+              <article class="ropeRoleCard" data-role-card="belayerLead">
+                <div>
+                  <h4>Assureur tête</h4>
+                  <p class="muted smallText"><span data-role-count="belayerLead">0 observable</span></p>
+                </div>
+                <button class="btn secondary" type="button" data-role-config="belayerLead">Configurer</button>
+              </article>
+              <article class="ropeRoleCard" data-role-card="backUpBelayer">
+                <div>
+                  <h4>Contre-assureur</h4>
+                  <p class="muted smallText"><span data-role-count="backUpBelayer">0 observable</span></p>
+                </div>
+                <button class="btn secondary" type="button" data-role-config="backUpBelayer">Configurer</button>
+              </article>
+            </div>
+            <p class="muted smallText ropePhaseFoot">Phase 2 : génération de cordées + popup.</p>
+          </div>
+        </section>
+      </div>
+      <div class="modePanel hidden" id="panelTeam">
+        <div class="modePlaceholderCard">
+          <span class="placeholderIcon" role="img" aria-label="Bientôt">🛠️</span>
+          <p>Phase 2 : configuration Sport co.</p>
         </div>
       </div>
-      <p class="muted smallText" id="terrainDisabledHint">Active le mode terrain pour générer automatiquement les cartes à partir des groupes.</p>
-      <div class="terrainGrid" id="terrainGrid"></div>
-      <div class="terrainMatches">
-        <h4>Matches récents</h4>
-        <ul id="terrainMatchesList"></ul>
+      <div class="modePanel hidden" id="panelCollective">
+        <div class="modePlaceholderCard">
+          <span class="placeholderIcon" role="img" aria-label="Bientôt">🛠️</span>
+          <p>Phase 2 : configuration Collectif.</p>
+        </div>
       </div>
     </section>
     <section class="rotationPanel" id="rotationPanel">

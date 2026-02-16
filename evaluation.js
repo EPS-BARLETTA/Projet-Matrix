@@ -29,10 +29,15 @@
     window.EPSMatrix.saveState(state);
   }
   evaluation.data.students.forEach((stu)=>window.EPSMatrix.ensureTerrainStudentFields(stu));
+  const hadRopeMode = Boolean(evaluation.data.ropeMode);
+  evaluation.data.ropeMode = normalizeRopeMode(evaluation.data.ropeMode);
   const hadTerrainMode = Boolean(evaluation.data.terrainMode);
   evaluation.data.terrainMode = window.EPSMatrix.normalizeTerrainMode(evaluation.data.terrainMode, evaluation.data.students);
   ensureCurrentRound();
   if(!hadTerrainMode){
+    window.EPSMatrix.saveState(state);
+  }
+  if(!hadRopeMode){
     window.EPSMatrix.saveState(state);
   }
 
@@ -57,6 +62,20 @@
   const terrainGrid = document.getElementById("terrainGrid");
   const terrainDisabledHint = document.getElementById("terrainDisabledHint");
   const terrainMatchesList = document.getElementById("terrainMatchesList");
+  const ropePanel = document.getElementById("ropePanel");
+  const ropeToggleBtn = document.getElementById("btnToggleRopeMode");
+  const ropeCompactHint = document.getElementById("ropeCompactHint");
+  const ropeContent = document.getElementById("ropeContent");
+  const ropeSizeSelect = document.getElementById("ropeSizeSelect");
+  const modeBar = document.getElementById("modeBar");
+  const modeButtons = modeBar ? Array.from(modeBar.querySelectorAll("[data-mode-btn]")) : [];
+  const modePanels = {
+    terrain: document.getElementById("panelTerrain"),
+    rope: document.getElementById("panelRope"),
+    team: document.getElementById("panelTeam"),
+    collective: document.getElementById("panelCollective")
+  };
+  const LAST_MODE_STORAGE_KEY = "EPSMatrix:lastMode";
   const resultsPanel = document.getElementById("resultsPanel");
   const resultsBody = document.getElementById("resultsBody");
   const btnExportResultsCsv = document.getElementById("btnExportResultsCsv");
@@ -153,6 +172,8 @@
 
   render();
   setupTerrainEvents();
+  setupRopeModeEvents();
+  setupModesBar();
 
   function render(){
     criterionMap = buildCriterionMap();
@@ -160,6 +181,7 @@
     updateStats();
     updateNoteToggle();
     renderTerrainSection();
+    renderRopePanel();
     renderRotationPanel();
     renderResultsTable();
   }
@@ -1201,6 +1223,59 @@
     persist();
   }
 
+  function normalizeRopeMode(raw){
+    const defaults = createDefaultRopeMode();
+    const source = raw && typeof raw === "object" ? raw : {};
+    const settings = source.settings && typeof source.settings === "object" ? source.settings : {};
+    const rolesEnabled = {...defaults.settings.rolesEnabled, ...(settings.rolesEnabled || {})};
+    const observablesByRole = {};
+    Object.keys(defaults.settings.observablesByRole).forEach((role)=>{
+      const entries = settings.observablesByRole?.[role];
+      observablesByRole[role] = Array.isArray(entries) ? entries.slice() : [];
+    });
+    return {
+      enabled: Boolean(source.enabled),
+      version: typeof source.version === "number" ? source.version : defaults.version,
+      settings:{
+        ropeSize: settings.ropeSize === 3 ? 3 : 2,
+        rolesEnabled,
+        observablesByRole
+      },
+      teams: Array.isArray(source.teams) ? source.teams : [],
+      penalties:{
+        preFlight: Number(source.penalties?.preFlight) || 0,
+        attempts: Number(source.penalties?.attempts) || 0
+      }
+    };
+  }
+
+  function createDefaultRopeMode(){
+    return {
+      enabled:false,
+      version:1,
+      settings:{
+        ropeSize:2,
+        rolesEnabled:{
+          climber:true,
+          belayerTopRope:true,
+          belayerLead:true,
+          backUpBelayer:true
+        },
+        observablesByRole:{
+          climber:[],
+          belayerTopRope:[],
+          belayerLead:[],
+          backUpBelayer:[]
+        }
+      },
+      teams:[],
+      penalties:{
+        preFlight:0,
+        attempts:0
+      }
+    };
+  }
+
   async function createEvaluationFromField(fieldId){
     const activityInput = await openTextPrompt({
       title:"Nom de l'évaluation",
@@ -1232,6 +1307,7 @@
         criteria,
         students: cls.students.map((stu)=>window.EPSMatrix.createEvalStudent(stu.name, criteria)),
         scoring: window.EPSMatrix.buildDefaultScoring(criteria),
+        ropeMode: createDefaultRopeMode(),
         savedAt: Date.now(),
         showNote: false
       }
@@ -1382,6 +1458,75 @@
         resultsPanel.scrollIntoView({behavior:"smooth", block:"center"});
       }
     });
+  }
+
+  function setupRopeModeEvents(){
+    if(!ropePanel) return;
+    ropeToggleBtn?.addEventListener("click", ()=>{
+      evaluation.data.ropeMode.enabled = !evaluation.data.ropeMode.enabled;
+      persist();
+      renderRopePanel();
+    });
+    ropeSizeSelect?.addEventListener("change", ()=>{
+      const value = ropeSizeSelect.value === "3" ? 3 : 2;
+      evaluation.data.ropeMode.settings.ropeSize = value;
+      persist();
+      renderRopePanel();
+    });
+    ropePanel.querySelectorAll("[data-role-config]").forEach((btn)=>{
+      btn.addEventListener("click", ()=>{
+        if(!evaluation.data.ropeMode.enabled){
+          window.alert("Active le mode cordée pour configurer ces rôles.");
+          return;
+        }
+        window.alert("Phase 2 : configuration des observables arrive bientôt.");
+      });
+    });
+  }
+
+  function setupModesBar(){
+    if(!modeButtons.length) return;
+    const stored = getStoredModePreference();
+    const fallback = stored || (evaluation.data.ropeMode?.enabled ? "rope" : "terrain");
+    openMode(fallback, true);
+    modeButtons.forEach((btn)=>{
+      btn.addEventListener("click", ()=>{
+        openMode(btn.dataset.modeBtn || "terrain");
+      });
+    });
+  }
+
+  function getStoredModePreference(){
+    try{
+      return localStorage.getItem(LAST_MODE_STORAGE_KEY) || "";
+    }catch(_e){
+      return "";
+    }
+  }
+
+  function openMode(modeKey, skipPersist){
+    let key = modeKey;
+    if(!modePanels[key]){
+      key = "terrain";
+    }
+    modeButtons.forEach((btn)=>{
+      const isActive = btn.dataset.modeBtn === key;
+      btn.classList.toggle("active", isActive);
+    });
+    Object.entries(modePanels).forEach(([name, panel])=>{
+      if(!panel) return;
+      panel.classList.toggle("hidden", name !== key);
+    });
+    if(!skipPersist){
+      try{
+        localStorage.setItem(LAST_MODE_STORAGE_KEY, key);
+      }catch(_e){}
+    }
+    if(key === "terrain"){
+      renderTerrainSection();
+    }else if(key === "rope"){
+      renderRopePanel();
+    }
   }
 
   function clampTerrainCountInput(value){
@@ -1614,6 +1759,33 @@ function assignGroupsRoundRobin(count){
     }
     terrainGrid.innerHTML = cards.join("");
     renderMatchesList(mode.matches || []);
+  }
+
+  function renderRopePanel(){
+    if(!ropePanel) return;
+    const mode = evaluation.data.ropeMode || createDefaultRopeMode();
+    const enabled = Boolean(mode.enabled);
+    ropeToggleBtn?.classList.toggle("active", enabled);
+    if(ropeToggleBtn){
+      ropeToggleBtn.textContent = enabled ? "Désactiver le mode cordée" : "Activer le mode cordée";
+      ropeToggleBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+    }
+    ropeContent?.classList.toggle("hidden", !enabled);
+    ropeCompactHint?.classList.toggle("hidden", enabled);
+    if(ropeSizeSelect){
+      ropeSizeSelect.value = mode.settings?.ropeSize === 3 ? "3" : "2";
+      ropeSizeSelect.disabled = !enabled;
+    }
+    ropePanel.querySelectorAll("[data-role-config]").forEach((btn)=>{
+      btn.disabled = !enabled;
+      btn.classList.toggle("disabled", !enabled);
+    });
+    ropePanel.querySelectorAll("[data-role-count]").forEach((span)=>{
+      const key = span.dataset.roleCount;
+      const list = mode.settings?.observablesByRole?.[key];
+      const count = Array.isArray(list) ? list.length : 0;
+      span.textContent = `${count} observable${count>1?"s":""}`;
+    });
   }
 
   function buildTerrainGroups(){

@@ -358,6 +358,25 @@ tbody tr.isAbsent td{background:#e2e8f0;color:#475569;}
 .featureCard{background:#fff;border-radius:28px;padding:24px;text-align:left;border:1px solid rgba(12,38,85,.06);box-shadow:0 20px 60px rgba(12,38,85,.08);}
 .featureCard h3{margin:0 0 8px;font-size:1.2rem;color:#0b1c47;}
 .featureCard p{margin:0;color:var(--muted);}
+.modeSection{margin:24px 0;}
+.modeBar{display:flex;gap:8px;flex-wrap:wrap;}
+.modeChip{border:1px solid var(--line);border-radius:999px;padding:8px 16px;background:#fff;font-weight:600;cursor:pointer;}
+.modeChip.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.modePanel{margin-top:16px;}
+.modePlaceholderCard{padding:20px;border:1px dashed var(--line);border-radius:18px;background:#fff;text-align:center;}
+.modePlaceholderCard .placeholderIcon{display:block;font-size:1.8rem;margin-bottom:8px;}
+.ropePanel{padding:24px;border-radius:28px;background:#fff;border:1px solid var(--line);box-shadow:0 20px 60px rgba(12,38,85,.08);}
+.ropeHeader h3{margin:0;}
+.ropeCompact{padding:16px;border-radius:18px;background:#f5f7ff;border:1px dashed var(--line);margin-top:12px;}
+.ropeContent{margin-top:16px;display:flex;flex-direction:column;gap:18px;}
+.ropeSettingsRow{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;}
+.ropeSelectLabel{display:flex;flex-direction:column;font-weight:600;color:var(--muted);gap:6px;}
+.ropeSelectLabel select{border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:1rem;}
+.ropeRoles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+.ropeRoleCard{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fdfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.ropeRoleCard h4{margin:0;}
+.ropeRoleCard button.disabled{opacity:.5;}
+.ropePhaseFoot{margin:0;}
 :root[data-theme="dark"] .manualBlock[data-tone="blue"]{background:rgba(59,130,246,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="green"]{background:rgba(34,197,94,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="orange"]{background:rgba(234,179,8,.22);}
