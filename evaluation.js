@@ -67,6 +67,13 @@
   const ropeCompactHint = document.getElementById("ropeCompactHint");
   const ropeContent = document.getElementById("ropeContent");
   const ropeSizeSelect = document.getElementById("ropeSizeSelect");
+  const ropeModal = document.getElementById("ropeModal");
+  const ropeModalTitle = document.getElementById("ropeModalTitle");
+  const ropeObservableList = document.getElementById("ropeObservableList");
+  const ropeObservableInput = document.getElementById("ropeObservableInput");
+  const btnAddRopeObservable = document.getElementById("btnAddRopeObservable");
+  const btnCloseRopeModal = document.getElementById("btnCloseRopeModal");
+  const btnCloseRopeModalFooter = document.getElementById("btnCloseRopeModalFooter");
   const modeBar = document.getElementById("modeBar");
   const modeButtons = modeBar ? Array.from(modeBar.querySelectorAll("[data-mode-btn]")) : [];
   const modePanels = {
@@ -76,6 +83,13 @@
     collective: document.getElementById("panelCollective")
   };
   const LAST_MODE_STORAGE_KEY = "EPSMatrix:lastMode";
+  const ROPE_ROLE_LABELS = {
+    climber: "Grimpeur",
+    belayerTopRope: "Assureur moulinette",
+    belayerLead: "Assureur tête",
+    backUpBelayer: "Contre-assureur"
+  };
+  let activeRopeRole = null;
   const resultsPanel = document.getElementById("resultsPanel");
   const resultsBody = document.getElementById("resultsBody");
   const btnExportResultsCsv = document.getElementById("btnExportResultsCsv");
@@ -104,6 +118,26 @@
   let viewingStudentId = null;
   let rotationPersistTimer = null;
   const matchScoreDrafts = new Map();
+
+  btnAddRopeObservable?.addEventListener("click", addRopeObservableFromInput);
+  ropeObservableInput?.addEventListener("keydown", (event)=>{
+    if(event.key === "Enter"){
+      event.preventDefault();
+      addRopeObservableFromInput();
+    }
+  });
+  btnCloseRopeModal?.addEventListener("click", closeRopeConfig);
+  btnCloseRopeModalFooter?.addEventListener("click", closeRopeConfig);
+  ropeModal?.addEventListener("click", (event)=>{
+    if(event.target === ropeModal){
+      closeRopeConfig();
+    }
+  });
+  document.addEventListener("keydown", (event)=>{
+    if(event.key === "Escape" && activeRopeRole && !ropeModal?.classList.contains("hidden")){
+      closeRopeConfig();
+    }
+  });
 
   const evalTitleEl = document.getElementById("evalTitle");
   const evalMetaEl = document.getElementById("evalMeta");
@@ -234,10 +268,20 @@
     </div>`;
   }
 
+  function formatGroupValueLabel(value){
+    if(!value) return "";
+    const match = String(value).match(/(\d+)/);
+    return match ? match[1] : String(value);
+  }
+
   function groupCell(stu){
+    const studentGroup = stu.groupTag || "";
+    const normalizedStudentGroup = formatGroupValueLabel(studentGroup);
     const options = GROUP_VALUES.map((value)=>{
-      const label = value ? `T${value}` : "—";
-      return `<option value="${value}" ${value===stu.groupTag?"selected":""}>${label}</option>`;
+      const label = value ? formatGroupValueLabel(value) : "—";
+      const normalizedValue = formatGroupValueLabel(value);
+      const selected = value === studentGroup || (normalizedValue && normalizedValue === normalizedStudentGroup);
+      return `<option value="${value}" ${selected?"selected":""}>${label}</option>`;
     }).join("");
     return `<select class="groupPicker" data-field="groupTag">${options}</select>`;
   }
@@ -1475,11 +1519,13 @@
     });
     ropePanel.querySelectorAll("[data-role-config]").forEach((btn)=>{
       btn.addEventListener("click", ()=>{
+        const roleKey = btn.dataset.roleConfig;
+        if(!roleKey) return;
         if(!evaluation.data.ropeMode.enabled){
           window.alert("Active le mode cordée pour configurer ces rôles.");
           return;
         }
-        window.alert("Phase 2 : configuration des observables arrive bientôt.");
+        openRoleConfig(roleKey);
       });
     });
   }
@@ -1788,6 +1834,96 @@ function assignGroupsRoundRobin(count){
     });
   }
 
+  function openRoleConfig(roleKey){
+    if(!ropeModal || !roleKey) return;
+    activeRopeRole = roleKey;
+    const label = ROPE_ROLE_LABELS[roleKey] || roleKey;
+    if(ropeModalTitle){
+      ropeModalTitle.textContent = `Observables — ${label}`;
+    }
+    renderRopeObservables();
+    ropeModal.classList.remove("hidden");
+    ropeModal.setAttribute("aria-hidden", "false");
+    ropeObservableInput?.focus();
+  }
+
+  function closeRopeConfig(){
+    if(!ropeModal) return;
+    ropeModal.classList.add("hidden");
+    ropeModal.setAttribute("aria-hidden", "true");
+    ropeObservableInput?.blur();
+    ropeObservableInput && (ropeObservableInput.value = "");
+    activeRopeRole = null;
+  }
+
+  function renderRopeObservables(){
+    if(!ropeObservableList){
+      return;
+    }
+    const list = activeRopeRole ? ensureRoleObservables(activeRopeRole) : [];
+    if(!list.length){
+      ropeObservableList.innerHTML = '<li class="muted">Aucun observable.</li>';
+      return;
+    }
+    ropeObservableList.innerHTML = list.map((entry, index)=>`<li>
+        <input type="text" value="${escapeHtml(entry)}" data-obs-index="${index}" />
+        <button type="button" data-remove-index="${index}" aria-label="Supprimer">×</button>
+      </li>`).join("");
+    ropeObservableList.querySelectorAll("input[data-obs-index]").forEach((input)=>{
+      input.addEventListener("change", (event)=>{
+        const idx = Number(event.target.dataset.obsIndex);
+        updateRopeObservable(idx, event.target.value);
+      });
+    });
+    ropeObservableList.querySelectorAll("button[data-remove-index]").forEach((btn)=>{
+      btn.addEventListener("click", ()=>{
+        const idx = Number(btn.dataset.removeIndex);
+        removeRopeObservable(idx);
+      });
+    });
+  }
+
+  function ensureRoleObservables(roleKey){
+    const mode = evaluation.data.ropeMode || createDefaultRopeMode();
+    const map = mode.settings?.observablesByRole || {};
+    if(!Array.isArray(map[roleKey])){
+      map[roleKey] = [];
+    }
+    evaluation.data.ropeMode.settings.observablesByRole = map;
+    return map[roleKey];
+  }
+
+  function addRopeObservableFromInput(){
+    if(!activeRopeRole) return;
+    const value = (ropeObservableInput?.value || "").trim();
+    if(!value) return;
+    const list = ensureRoleObservables(activeRopeRole);
+    list.push(value);
+    ropeObservableInput.value = "";
+    persist();
+    renderRopeObservables();
+    renderRopePanel();
+  }
+
+  function updateRopeObservable(index, rawValue){
+    if(!activeRopeRole) return;
+    const list = ensureRoleObservables(activeRopeRole);
+    if(index < 0 || index >= list.length) return;
+    list[index] = (rawValue || "").trim();
+    persist();
+    renderRopePanel();
+  }
+
+  function removeRopeObservable(index){
+    if(!activeRopeRole) return;
+    const list = ensureRoleObservables(activeRopeRole);
+    if(index < 0 || index >= list.length) return;
+    list.splice(index, 1);
+    persist();
+    renderRopeObservables();
+    renderRopePanel();
+  }
+
   function buildTerrainGroups(){
     const indexes = getAllGroupIndexes();
     return indexes.map((index)=>({
@@ -1835,10 +1971,11 @@ function assignGroupsRoundRobin(count){
       </li>`;
     }).join("") : `<p class="muted smallText">Aucun joueur affecté.</p>`;
     const refBlock = ref ? `<p class="terrainLabel">Arbitre : <strong>${escapeHtml(ref.name)}</strong></p>` : `<p class="terrainLabel">Aucun arbitre</p>`;
+    const terrainHeading = group.label ? `Terrain ${group.label}` : "Terrain —";
     return `<article class="terrainCard" data-group="${group.index}">
       <header>
         <div>
-          <h3>${group.label}</h3>
+          <h3>${terrainHeading}</h3>
           <p class="terrainLabel">Joueurs : ${group.students.length}</p>
         </div>
         <button class="btn secondary" type="button" data-action="focus-score" data-group="${group.index}">Saisir score</button>
@@ -1859,9 +1996,20 @@ function assignGroupsRoundRobin(count){
     </article>`;
   }
 
-  function formatGroupLabel(index){
-    const parsed = window.EPSMatrix.parseGroupIndex ? window.EPSMatrix.parseGroupIndex(index) : Number(index) || 1;
-    return `Terrain ${parsed || 1}`;
+  function formatGroupLabel(value){
+    if(value === null || typeof value === "undefined") return "";
+    const parsed = window.EPSMatrix.parseGroupIndex ? window.EPSMatrix.parseGroupIndex(value) : Number(value);
+    if(Number.isFinite(parsed) && parsed > 0){
+      return String(parsed);
+    }
+    if(typeof value === "number" && Number.isFinite(value)){
+      return String(value);
+    }
+    const match = String(value).match(/(\d+)/);
+    if(match){
+      return match[1];
+    }
+    return String(value);
   }
 
   function formatStartBadge(tag){
@@ -1890,7 +2038,8 @@ function assignGroupsRoundRobin(count){
     const score = match.scoreText ? ` • ${escapeHtml(match.scoreText)}` : "";
     const refLabel = match.refId ? ` – arbitre ${ref}` : "";
     const timeLabel = match.at ? new Date(match.at).toLocaleTimeString("fr-FR",{hour:"2-digit", minute:"2-digit"}) : "";
-    const groupLabel = formatGroupLabel(match.groupIndex || 1);
+    const groupValue = formatGroupLabel(match.groupIndex || 1);
+    const groupLabel = groupValue ? `Terrain ${groupValue}` : "Terrain —";
     const abandon = match.forfeitId ? ` – Abandon (${findStudentName(match.forfeitId)})` : "";
     return `<li><span class="muted">${groupLabel}</span> • <strong>${winner}</strong> bat ${loser}${score}${refLabel}${abandon}<span class="muted"> (${timeLabel})</span></li>`;
   }
@@ -2026,9 +2175,11 @@ function assignGroupsRoundRobin(count){
     const correctionButton = showCorrection ? `<button class="btn secondary tiny" type="button" data-action="reset-match" data-match="${match.id}">Corriger</button>` : "";
     const validateButton = canValidate ? `<button class="btn primary tiny" type="button" data-action="validate-match" data-match="${match.id}">✅ Valider</button>` : "";
     const footerActions = [validateButton, correctionButton].filter(Boolean).join("");
+    const rotationGroupValue = formatGroupLabel(match.groupIndex);
+    const rotationGroupLabel = rotationGroupValue ? `Terrain ${rotationGroupValue}` : "Terrain —";
     return `<article class="rotationMatchCard ${doneClass} ${lockedClass}" data-match="${match.id}" data-group="${match.groupIndex || ""}">
       <div class="rotationMatchHeader">
-        <strong>${formatGroupLabel(match.groupIndex)}</strong>
+        <strong>${rotationGroupLabel}</strong>
         <span class="rotationMatchMeta">${refLabel}</span>
       </div>
       <div class="rotationMatchTeams" data-match="${match.id}">
@@ -2175,7 +2326,11 @@ function assignGroupsRoundRobin(count){
     editingPlayerId = student.id;
     const currentIndex = window.EPSMatrix.parseGroupIndex(student.groupTag);
     if(playerModalTitle) playerModalTitle.textContent = student.name;
-    if(playerModalMeta) playerModalMeta.textContent = `${formatGroupLabel(currentIndex || "—")} • ${formatStartBadge(student.startGroupTag)}`;
+    if(playerModalMeta){
+      const currentLabel = formatGroupLabel(currentIndex || "—");
+      const modalGroupLabel = currentLabel ? `Terrain ${currentLabel}` : "Terrain —";
+      playerModalMeta.textContent = `${modalGroupLabel} • ${formatStartBadge(student.startGroupTag)}`;
+    }
     if(playerNoteInput) playerNoteInput.value = student.freeNote || "";
     if(playerRoleSelect) playerRoleSelect.value = student.role || "player";
     playerModal.classList.remove("hidden");
@@ -2362,8 +2517,10 @@ function assignGroupsRoundRobin(count){
         abandonText = match.forfeitId === studentId ? " • Abandon" : " • Abandon adverse";
       }
       const timeLabel = match.at ? new Date(match.at).toLocaleString("fr-FR",{day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
+      const historyGroupValue = formatGroupLabel(match.groupIndex || 1);
+      const historyGroupLabel = historyGroupValue ? `Terrain ${historyGroupValue}` : "Terrain —";
       return `<li>
-        <strong>${timeLabel}</strong> – ${formatGroupLabel(match.groupIndex || 1)} • vs ${opponentName}
+        <strong>${timeLabel}</strong> – ${historyGroupLabel} • vs ${opponentName}
         <span class="${resultClass}">${label}</span>${scoreText}${refText}${abandonText}
       </li>`;
     });

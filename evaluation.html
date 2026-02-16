@@ -284,5 +284,23 @@
       </div>
     </div>
   </div>
+
+  <div class="modal hidden" id="ropeModal" role="dialog" aria-modal="true">
+    <div class="modalCard" style="width:min(520px,100%);">
+      <div class="modalHeader">
+        <h2 id="ropeModalTitle">Observables</h2>
+        <button class="iconButton" type="button" id="btnCloseRopeModal" aria-label="Fermer">×</button>
+      </div>
+      <ul id="ropeObservableList" class="ropeObservableList"></ul>
+      <div class="ropeObservableAdd">
+        <input type="text" id="ropeObservableInput" placeholder="Nouvel observable" aria-label="Nouvel observable" />
+        <button class="btn primary" type="button" id="btnAddRopeObservable">Ajouter</button>
+      </div>
+      <div class="actions modalActions">
+        <span class="flex-fill"></span>
+        <button class="btn secondary" type="button" id="btnCloseRopeModalFooter">Fermer</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

@@ -377,6 +377,12 @@ tbody tr.isAbsent td{background:#e2e8f0;color:#475569;}
 .ropeRoleCard h4{margin:0;}
 .ropeRoleCard button.disabled{opacity:.5;}
 .ropePhaseFoot{margin:0;}
+.ropeObservableList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.ropeObservableList li{display:flex;gap:8px;align-items:center;}
+.ropeObservableList li input{flex:1;border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-family:inherit;font-size:1rem;}
+.ropeObservableList li button{border:none;background:rgba(15,23,42,.08);border-radius:999px;width:34px;height:34px;cursor:pointer;}
+.ropeObservableAdd{margin-top:16px;display:flex;gap:10px;}
+.ropeObservableAdd input{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:1rem;font-family:inherit;}
 :root[data-theme="dark"] .manualBlock[data-tone="blue"]{background:rgba(59,130,246,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="green"]{background:rgba(34,197,94,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="orange"]{background:rgba(234,179,8,.22);}
