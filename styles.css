@@ -369,20 +369,49 @@ tbody tr.isAbsent td{background:#e2e8f0;color:#475569;}
 .ropeHeader h3{margin:0;}
 .ropeCompact{padding:16px;border-radius:18px;background:#f5f7ff;border:1px dashed var(--line);margin-top:12px;}
 .ropeContent{margin-top:16px;display:flex;flex-direction:column;gap:18px;}
-.ropeSettingsRow{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;}
+.ropeSettingsRow{display:flex;flex-direction:column;gap:16px;}
 .ropeSelectLabel{display:flex;flex-direction:column;font-weight:600;color:var(--muted);gap:6px;}
 .ropeSelectLabel select{border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:1rem;}
+.ropeEvalRow{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+.ropeEvalRow .btn{height:46px;min-width:160px;}
+.ropeConfigToggle{text-align:left;}
 .ropeRoles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
 .ropeRoleCard{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fdfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
 .ropeRoleCard h4{margin:0;}
 .ropeRoleCard button.disabled{opacity:.5;}
-.ropePhaseFoot{margin:0;}
+.ropeEvalCard{width:min(640px,calc(100% - 32px));}
+.ropeEvalMeta{text-align:left;margin-bottom:12px;color:var(--muted);}
+.ropeEvalList{display:block;margin-bottom:16px;}
+.ropeEvalGridWrapper{margin-bottom:16px;overflow-x:auto;}
+.ropeEvalGrid{width:100%;min-width:720px;border-collapse:separate;border-spacing:0;background:#fff;table-layout:fixed;}
+.ropeEvalGrid th:not(:first-child),.ropeEvalGrid td:not(:first-child){width:160px;min-width:160px;}
+.ropeEvalGrid th,.ropeEvalGrid td{border:1px solid var(--line);padding:8px;text-align:center;font-size:0.9rem;}
+.ropeEvalGrid thead th{background:#f5f7ff;font-weight:600;}
+.ropeEvalGrid th:first-child,.ropeEvalGrid td:first-child{position:sticky;left:0;background:#fff;text-align:left;z-index:1;width:140px;min-width:140px;max-width:140px;}
+.ropeEvalStudentHeader{display:flex;flex-direction:column;gap:6px;}
+.ropeEvalStudentHeader select{border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:0.9rem;}
+.ropeEvalGrid select{width:100%;border-radius:10px;border:1px solid var(--line);padding:4px 6px;font-weight:600;}
+.ropeEvalGrid .inactiveCell select{opacity:0.3;pointer-events:none;}
+.ropeEvalFooter{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.ropeEvalFooter .flex-fill{flex:1;}
+.ropeConfigToggle + .ropeRoles{margin-top:8px;}
+.ropeEvalRow .ropeSelectLabel{flex:1;min-width:180px;}
+.ropeEvalRow select{width:100%;}
 .ropeObservableList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
-.ropeObservableList li{display:flex;gap:8px;align-items:center;}
-.ropeObservableList li input{flex:1;border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-family:inherit;font-size:1rem;}
+.ropeObservableList li{display:flex;gap:8px;align-items:flex-start;}
+.ropeObservableFields{display:flex;flex-direction:column;gap:10px;flex:1;}
+.ropeObservableScale{display:flex;flex-direction:column;gap:4px;}
+.ropeObservableScale select,.ropeObservableScale input{border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:0.9rem;font-family:inherit;}
+.ropeObservableList li input[type="text"]{flex:1;border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-family:inherit;font-size:1rem;}
 .ropeObservableList li button{border:none;background:rgba(15,23,42,.08);border-radius:999px;width:34px;height:34px;cursor:pointer;}
 .ropeObservableAdd{margin-top:16px;display:flex;gap:10px;}
 .ropeObservableAdd input{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:1rem;font-family:inherit;}
+.ropeTeamEmptyHint{margin:0;}
+.ropeEvalGrid input[type="text"]{width:100%;border-radius:10px;border:1px solid var(--line);padding:4px 6px;font-size:0.9rem;}
+@media (max-width:600px){
+  .ropeEvalRow{flex-direction:column;align-items:stretch;}
+  .ropeEvalRow .btn{width:100%;}
+}
 :root[data-theme="dark"] .manualBlock[data-tone="blue"]{background:rgba(59,130,246,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="green"]{background:rgba(34,197,94,.2);}
 :root[data-theme="dark"] .manualBlock[data-tone="orange"]{background:rgba(234,179,8,.22);}

@@ -39,7 +39,7 @@
         <button class="modeChip" type="button" data-mode-btn="team">Sport co</button>
         <button class="modeChip" type="button" data-mode-btn="collective">Collectif</button>
       </div>
-      <div class="modePanel" id="panelTerrain">
+      <div class="modePanel hidden" id="panelTerrain">
         <section class="terrainPanel" id="terrainPanel">
           <div class="terrainPanelHeader">
             <div class="terrainToggleRow">
@@ -73,7 +73,7 @@
             <button class="btn secondary" type="button" id="btnToggleRopeMode">Activer le mode cordée</button>
           </div>
           <div class="ropeCompact" id="ropeCompactHint">
-            <p class="muted smallText">Prépare tes cordées et assigne les rôles grimpeur/assureurs. Active uniquement quand nécessaire.</p>
+            <p class="muted smallText">Active uniquement quand nécessaire, configure tes observables puis choisis une cordée à évaluer.</p>
           </div>
           <div class="ropeContent hidden" id="ropeContent">
             <div class="ropeSettingsRow">
@@ -84,9 +84,21 @@
                   <option value="3">Cordée de 3</option>
                 </select>
               </label>
-              <p class="muted smallText">Phase 1 : fondations data, observables et paramètres.</p>
+              <div class="ropeEvalRow">
+                <label class="ropeSelectLabel">
+                  Cordée à évaluer
+                  <select id="ropeTeamSelect">
+                    <option value="">Sélectionner une cordée</option>
+                  </select>
+                </label>
+                <button class="btn secondary" type="button" id="btnManageRopeTeams">Gérer les cordées</button>
+              </div>
             </div>
-            <div class="ropeRoles">
+            <p class="muted smallText hidden" id="ropeTeamEmptyHint">Affecte tes élèves à un groupe (T1, T2...) pour lancer une cordée.</p>
+            <div class="ropeConfigToggle">
+              <button class="btn secondary" type="button" id="btnToggleRopeConfig">Configurer les observables</button>
+            </div>
+            <div class="ropeRoles hidden" id="ropeConfigPanel">
               <article class="ropeRoleCard" data-role-card="climber">
                 <div>
                   <h4>Grimpeur</h4>
@@ -116,7 +128,6 @@
                 <button class="btn secondary" type="button" data-role-config="backUpBelayer">Configurer</button>
               </article>
             </div>
-            <p class="muted smallText ropePhaseFoot">Phase 2 : génération de cordées + popup.</p>
           </div>
         </section>
       </div>
@@ -299,6 +310,26 @@
       <div class="actions modalActions">
         <span class="flex-fill"></span>
         <button class="btn secondary" type="button" id="btnCloseRopeModalFooter">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="ropeEvalModal" role="dialog" aria-modal="true">
+    <div class="modalCard ropeEvalCard">
+      <div class="modalHeader">
+        <h2 id="ropeEvalTitle">Évaluation cordée</h2>
+        <button class="iconButton" type="button" id="btnCloseRopeEval" aria-label="Fermer">×</button>
+      </div>
+      <div id="ropeEvalTeamMeta" class="ropeEvalMeta"></div>
+      <div class="ropeEvalGridWrapper">
+        <div id="ropeEvalList" class="ropeEvalList"></div>
+      </div>
+      <div class="ropeEvalFooter">
+        <button class="btn secondary" type="button" id="btnRopeSafetyFault">Défaut de sécurité (+1)</button>
+        <span id="ropeEvalSafetyLabel" class="muted smallText"></span>
+        <span class="flex-fill"></span>
+        <button class="btn secondary" type="button" id="btnCloseRopeEvalFooter">Fermer</button>
+        <button class="btn primary" type="button" id="btnSaveRopeEval">Enregistrer</button>
       </div>
     </div>
   </div>

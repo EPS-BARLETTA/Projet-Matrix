@@ -74,6 +74,21 @@
   const btnAddRopeObservable = document.getElementById("btnAddRopeObservable");
   const btnCloseRopeModal = document.getElementById("btnCloseRopeModal");
   const btnCloseRopeModalFooter = document.getElementById("btnCloseRopeModalFooter");
+  const ropeTeamSelect = document.getElementById("ropeTeamSelect");
+  const ropeTeamEmptyHint = document.getElementById("ropeTeamEmptyHint");
+  const btnManageRopeTeams = document.getElementById("btnManageRopeTeams");
+  const btnToggleRopeConfig = document.getElementById("btnToggleRopeConfig");
+  const ropeConfigPanel = document.getElementById("ropeConfigPanel");
+  const ropeEvalModal = document.getElementById("ropeEvalModal");
+  const ropeEvalTitle = document.getElementById("ropeEvalTitle");
+  const ropeEvalTeamMeta = document.getElementById("ropeEvalTeamMeta");
+  const ropeEvalList = document.getElementById("ropeEvalList");
+  const ropeEvalSafetyLabel = document.getElementById("ropeEvalSafetyLabel");
+  const btnRopeSafetyFault = document.getElementById("btnRopeSafetyFault");
+  const btnCloseRopeEval = document.getElementById("btnCloseRopeEval");
+  const btnCloseRopeEvalFooter = document.getElementById("btnCloseRopeEvalFooter");
+  const btnSaveRopeEval = document.getElementById("btnSaveRopeEval");
+  const ropeSafetyButtonDefaultLabel = btnRopeSafetyFault?.textContent || "Défaut de sécurité (+1)";
   const modeBar = document.getElementById("modeBar");
   const modeButtons = modeBar ? Array.from(modeBar.querySelectorAll("[data-mode-btn]")) : [];
   const modePanels = {
@@ -89,7 +104,53 @@
     belayerLead: "Assureur tête",
     backUpBelayer: "Contre-assureur"
   };
+  const ROPE_ROLE_ORDER = ["climber","belayerTopRope","belayerLead","backUpBelayer"];
+  const ROPE_SAFETY_SESSION_KEY = "epsmatrix_ropeSafetyClicked";
+  const ROPE_SCALE_PRESETS = {
+    NA_PA_A:{
+      type:"select",
+      options:[
+        {value:"A", label:"A"},
+        {value:"PA", label:"PA"},
+        {value:"NA", label:"NA"}
+      ]
+    },
+    ONE_TO_FOUR:{
+      type:"select",
+      options:[1,2,3,4].map((num)=>({value:String(num), label:String(num)}))
+    },
+    A_TO_D:{
+      type:"select",
+      options:["A","B","C","D"].map((letter)=>({value:letter, label:letter}))
+    },
+    CHECK:{
+      type:"select",
+      options:[
+        {value:"✅", label:"✅"},
+        {value:"❌", label:"❌"}
+      ]
+    },
+    COMMENT:{
+      type:"text"
+    },
+    CUSTOM:{
+      type:"select",
+      options:[]
+    }
+  };
+  const ROPE_SCALE_OPTIONS = [
+    {value:"NA_PA_A", label:"A / PA / NA"},
+    {value:"ONE_TO_FOUR", label:"1 à 4"},
+    {value:"A_TO_D", label:"A à D"},
+    {value:"CHECK", label:"✅ / ❌"},
+    {value:"COMMENT", label:"Commentaire"},
+    {value:"CUSTOM", label:"Personnalisé"}
+  ];
+  const ROPE_DEFAULT_SCALE = "NA_PA_A";
   let activeRopeRole = null;
+  let activeRopeEvaluation = null;
+  let ropeConfigExpanded = false;
+  let ropeEvalTeam = null;
   const resultsPanel = document.getElementById("resultsPanel");
   const resultsBody = document.getElementById("resultsBody");
   const btnExportResultsCsv = document.getElementById("btnExportResultsCsv");
@@ -134,10 +195,31 @@
     }
   });
   document.addEventListener("keydown", (event)=>{
-    if(event.key === "Escape" && activeRopeRole && !ropeModal?.classList.contains("hidden")){
+    if(event.key !== "Escape") return;
+    if(activeRopeRole && !ropeModal?.classList.contains("hidden")){
       closeRopeConfig();
+      return;
+    }
+    if(activeRopeEvaluation && !ropeEvalModal?.classList.contains("hidden")){
+      closeRopeEvaluationModal();
     }
   });
+  ropeEvalModal?.addEventListener("click", (event)=>{
+    if(event.target === ropeEvalModal){
+      closeRopeEvaluationModal();
+    }
+  });
+  ropeTeamSelect?.addEventListener("change", handleRopeTeamSelection);
+  btnManageRopeTeams?.addEventListener("click", handleManageRopeTeams);
+  btnToggleRopeConfig?.addEventListener("click", ()=>{
+    toggleRopeConfigPanel();
+  });
+  btnRopeSafetyFault?.addEventListener("click", handleRopeSafetyFault);
+  btnCloseRopeEval?.addEventListener("click", closeRopeEvaluationModal);
+  btnCloseRopeEvalFooter?.addEventListener("click", closeRopeEvaluationModal);
+  btnSaveRopeEval?.addEventListener("click", saveRopeEvaluation);
+  ropeEvalList?.addEventListener("change", handleRopeEvalChange);
+  ropeEvalList?.addEventListener("input", handleRopeEvalChange);
 
   const evalTitleEl = document.getElementById("evalTitle");
   const evalMetaEl = document.getElementById("evalMeta");
@@ -223,17 +305,52 @@
   function renderTable(){
     const showNote = Boolean(evaluation.data.showNote);
     const baseFields = getActiveBaseFields();
-    const headers = ["Prénom","Groupe", ...baseFields.map((field)=>field.label), ...evaluation.data.criteria.map((c)=>c.label||"Critère")];
-    if(showNote){ headers.push("Note"); }
-    headers.push("Statut");
-    thead.innerHTML = headers.map((h)=>`<th>${h}</th>`).join("");
+    const showRopeSecurity = shouldShowRopeSecurityColumn();
+    const ropeColumns = [];
+    if(showRopeSecurity){
+      const ropeGroups = buildRopeGridColumns();
+      ropeGroups.forEach((group)=>{
+        if(!group.hasObservables) return;
+        group.observables.forEach((obs)=>{
+          if(obs.isPlaceholder) return;
+          ropeColumns.push({
+            roleKey: group.roleKey,
+            label: `${ROPE_ROLE_LABELS[group.roleKey] || group.roleKey} – ${obs.label}`,
+            className: `obs-role-${group.roleKey}`,
+            observableId: obs.id,
+            observableLabel: obs.label,
+            scale: obs.scale
+          });
+        });
+      });
+    }
+    const headerCells = [{label:"Prénom"},{label:"Groupe"}];
+    if(showRopeSecurity){
+      headerCells.push({label:"Sécurité"});
+    }
+    ropeColumns.forEach((col)=>{
+      headerCells.push({label: col.label, className: col.className});
+    });
+    baseFields.forEach((field)=>{ headerCells.push({label: field.label}); });
+    evaluation.data.criteria.forEach((crit)=>{ headerCells.push({label: crit.label || "Critère"}); });
+    if(showNote){ headerCells.push({label:"Note"}); }
+    headerCells.push({label:"Statut"});
+    thead.innerHTML = `<tr>${headerCells.map((cell)=>`<th${cell.className?` class="${cell.className}"`:""}>${escapeHtml(cell.label || "")}</th>`).join("")}</tr>`;
     const orderedStudents = sortStudentsForDisplay(evaluation.data.students);
-    tbody.innerHTML = orderedStudents.map((stu)=>rowHTML(stu, baseFields, showNote)).join("");
+    tbody.innerHTML = orderedStudents.map((stu)=>rowHTML(stu, baseFields, showNote, showRopeSecurity, ropeColumns)).join("");
     tbody.querySelectorAll("select[data-field]").forEach(decorateSelect);
     applyGroupingStyles();
   }
 
-  function rowHTML(stu, baseFields, showNote){
+  function shouldShowRopeSecurityColumn(){
+    const modeEnabled = Boolean(evaluation.data.ropeMode?.enabled);
+    if(!modeEnabled) return false;
+    const panel = modePanels?.rope;
+    if(!panel) return false;
+    return !panel.classList.contains("hidden");
+  }
+
+  function rowHTML(stu, baseFields, showNote, showRopeSecurityColumn, ropeColumns){
     const criteriaCells = evaluation.data.criteria.map((crit)=>{
       const info = window.EPSMatrix.CRITERIA_TYPES[crit.type] || {};
       if(info.isComment){
@@ -247,9 +364,13 @@
     const noteCell = showNote ? `<td data-cell="note"><strong>${computeScore(stu)}</strong></td>` : "";
     const rowClass = stu.absent ? "isAbsent" : (stu.dispense ? "isDispense" : "");
     const classAttr = rowClass ? ` class="${rowClass}"` : "";
+    const safetyCell = showRopeSecurityColumn ? `<td>${formatRopeSafetyFaults(stu.id)}</td>` : "";
+    const ropeCells = ropeColumns.length ? buildRopeObservableCells(stu, ropeColumns) : "";
     return `<tr${classAttr} data-id="${stu.id}" data-name="${stu.name}" data-group="${stu.groupTag||""}">
       <td>${nameCell(stu)}</td>
       <td>${groupCell(stu)}</td>
+      ${safetyCell}
+      ${ropeCells}
       ${baseCells}
       ${criteriaCells}
       ${noteCell}
@@ -269,9 +390,18 @@
   }
 
   function formatGroupValueLabel(value){
-    if(!value) return "";
-    const match = String(value).match(/(\d+)/);
-    return match ? match[1] : String(value);
+    const normalized = normalizeGroupKey(value);
+    return normalized || "";
+  }
+
+  function normalizeGroupKey(value){
+    if(value === null || typeof value === "undefined") return "";
+    const parsed = window.EPSMatrix.parseGroupIndex ? window.EPSMatrix.parseGroupIndex(value) : Number(value);
+    if(Number.isFinite(parsed) && parsed > 0){
+      return String(parsed);
+    }
+    const match = String(value || "").match(/(\d+)/);
+    return match ? match[1] : "";
   }
 
   function groupCell(stu){
@@ -284,6 +414,52 @@
       return `<option value="${value}" ${selected?"selected":""}>${label}</option>`;
     }).join("");
     return `<select class="groupPicker" data-field="groupTag">${options}</select>`;
+  }
+
+  function formatRopeSafetyFaults(studentId){
+    const student = getStudentById(studentId);
+    const groupKey = normalizeGroupKey(student?.groupTag);
+    if(!groupKey) return "—";
+    const team = getRopeTeamByGroupKey(groupKey);
+    const faults = Number(team?.safetyFaults) || 0;
+    return faults ? `Défauts: ${faults}` : "—";
+  }
+
+  function buildRopeObservableCells(student, ropeColumns){
+    const team = findRopeTeamByStudent(student.id);
+    if(!team){
+      return ropeColumns.map((col)=>`<td class="obs-role-${col.roleKey}">—</td>`).join("");
+    }
+    return ropeColumns.map((col)=>{
+      const roleEntry = getLastStudentRopeScores(team, student.id, col.roleKey);
+      const value = getRopeObservableValueFromEntry(roleEntry, col);
+      const display = formatRopeObservableValueForTable(value, col);
+      return `<td class="obs-role-${col.roleKey}">${display}</td>`;
+    }).join("");
+  }
+
+  function getRopeObservableValueFromEntry(roleEntry, column){
+    if(!roleEntry?.observables) return "";
+    const entry = roleEntry.observables.find((obs)=>obs.id === column.observableId) || roleEntry.observables.find((obs)=>obs.label === column.observableLabel);
+    if(!entry) return "";
+    if(typeof entry.value === "string") return entry.value;
+    if(typeof entry.value === "number") return String(entry.value);
+    return "";
+  }
+
+  function formatRopeObservableValueForTable(value, column){
+    if(!value){
+      return "—";
+    }
+    const scale = column.scale;
+    if(scale?.type === "text"){
+      return escapeHtml(value);
+    }
+    const option = Array.isArray(scale?.options) ? scale.options.find((opt)=>opt.value === value) : null;
+    if(option){
+      return escapeHtml(option.label);
+    }
+    return escapeHtml(value);
   }
 
   function baseFieldCell(field, stu){
@@ -344,6 +520,57 @@
     const idx = GROUP_VALUES.indexOf(value);
     if(idx === -1) return GROUP_COLORS[Math.abs(hashCode(value)) % GROUP_COLORS.length];
     return GROUP_COLORS[idx % GROUP_COLORS.length];
+  }
+
+  function getRopeTeams(){
+    const list = evaluation.data.ropeMode?.teams;
+    return Array.isArray(list) ? list : [];
+  }
+
+  function findRopeTeamByStudent(studentId){
+    if(!studentId) return null;
+    const student = getStudentById(studentId);
+    const groupKey = normalizeGroupKey(student?.groupTag);
+    if(!groupKey) return null;
+    return getRopeTeamByGroupKey(groupKey);
+  }
+
+  function findRopeTeamById(teamId){
+    if(!teamId) return null;
+    const groupKey = normalizeGroupKey(teamId);
+    if(groupKey){
+      const byKey = getRopeTeamByGroupKey(groupKey);
+      if(byKey){
+        return byKey;
+      }
+    }
+    return getRopeTeams().find((team)=>team.id === teamId) || null;
+  }
+
+  function getRopeTeamByGroupKey(groupKey){
+    if(!groupKey) return null;
+    return getRopeTeams().find((team)=>team.groupKey === groupKey || team.id === groupKey) || null;
+  }
+
+  function ensureRopeTeamForGroup(groupKey){
+    if(!groupKey) return null;
+    let team = getRopeTeamByGroupKey(groupKey);
+    if(team){
+      return team;
+    }
+    const list = getRopeTeams();
+    team = {
+      id: groupKey,
+      groupKey,
+      name: "",
+      memberIds: [],
+      rolesByStudentId: {},
+      evaluations: [],
+      safetyFaults: 0
+    };
+    list.push(team);
+    evaluation.data.ropeMode.teams = list;
+    return team;
   }
 
   function computeLevel(type, value){
@@ -1275,7 +1502,7 @@
     const observablesByRole = {};
     Object.keys(defaults.settings.observablesByRole).forEach((role)=>{
       const entries = settings.observablesByRole?.[role];
-      observablesByRole[role] = Array.isArray(entries) ? entries.slice() : [];
+      observablesByRole[role] = normalizeRoleObservables(entries);
     });
     return {
       enabled: Boolean(source.enabled),
@@ -1285,11 +1512,96 @@
         rolesEnabled,
         observablesByRole
       },
-      teams: Array.isArray(source.teams) ? source.teams : [],
+      teams: normalizeRopeTeams(source.teams),
       penalties:{
         preFlight: Number(source.penalties?.preFlight) || 0,
         attempts: Number(source.penalties?.attempts) || 0
       }
+    };
+  }
+
+  function normalizeRoleObservables(list){
+    if(!Array.isArray(list) || !list.length) return [];
+    return list.map((entry)=>normalizeObservableConfig(entry)).filter(Boolean);
+  }
+
+  function normalizeObservableConfig(entry){
+    if(entry && typeof entry === "object"){
+      const id = typeof entry.id === "string" && entry.id ? entry.id : window.EPSMatrix.genId("ropeObs");
+      const label = typeof entry.label === "string" && entry.label ? entry.label : "Observable";
+      return {
+        id,
+        label,
+        scale: normalizeScale(entry.scale, entry)
+      };
+    }
+    if(typeof entry === "string"){
+      return {
+        id: window.EPSMatrix.genId("ropeObs"),
+        label: entry,
+        scale: createScaleFromPreset(ROPE_DEFAULT_SCALE)
+      };
+    }
+    return null;
+  }
+
+  function normalizeScale(scale, entry){
+    if(scale && typeof scale === "object"){
+      if(scale.type === "text" || scale.preset === "COMMENT"){
+        return {type:"text", preset:"COMMENT"};
+      }
+      const preset = scale.preset && ROPE_SCALE_PRESETS[scale.preset] ? scale.preset : null;
+      const options = Array.isArray(scale.options) && scale.options.length
+        ? scale.options.map((opt)=>({
+            value: typeof opt?.value === "string" && opt.value ? opt.value : (typeof opt?.label === "string" ? opt.label : ""),
+            label: typeof opt?.label === "string" && opt.label ? opt.label : (typeof opt?.value === "string" ? opt.value : "")
+          })).filter((opt)=>opt.label)
+        : null;
+      if(preset && ROPE_SCALE_PRESETS[preset].type === "text"){
+        return {type:"text", preset:"COMMENT"};
+      }
+      if(options && options.length){
+        return {
+          type:"select",
+          preset: preset || "CUSTOM",
+          options,
+          rawOptions: scale.rawOptions || (preset === "CUSTOM" ? options.map((opt)=>opt.label).join(", ") : undefined)
+        };
+      }
+      if(scale.preset === "CUSTOM" && typeof scale.rawOptions === "string"){
+        return createScaleFromPreset("CUSTOM", scale.rawOptions);
+      }
+      if(preset){
+        return createScaleFromPreset(preset);
+      }
+    }
+    if(entry && typeof entry === "object" && typeof entry.rawOptions === "string"){
+      return createScaleFromPreset("CUSTOM", entry.rawOptions);
+    }
+    return createScaleFromPreset(ROPE_DEFAULT_SCALE);
+  }
+
+  function createScaleFromPreset(presetKey, customRaw){
+    const preset = ROPE_SCALE_PRESETS[presetKey] || ROPE_SCALE_PRESETS[ROPE_DEFAULT_SCALE];
+    if(preset.type === "text"){
+      return {type:"text", preset:presetKey};
+    }
+    let options = preset.options;
+    let rawOptions = undefined;
+    if(presetKey === "CUSTOM"){
+      const raw = typeof customRaw === "string" ? customRaw : "";
+      const tokens = raw.split(",").map((token)=>token.trim()).filter(Boolean);
+      options = tokens.map((token)=>({value: token, label: token}));
+      rawOptions = raw;
+    }
+    return {
+      type:"select",
+      preset:presetKey,
+      options: options.map((opt)=>({
+        value: typeof opt.value === "string" ? opt.value : String(opt.value),
+        label: opt.label
+      })),
+      rawOptions
     };
   }
 
@@ -1318,6 +1630,97 @@
         attempts:0
       }
     };
+  }
+
+  function normalizeRopeTeams(rawTeams){
+    if(!Array.isArray(rawTeams)) return [];
+    return rawTeams.map((team, index)=>normalizeRopeTeam(team, index)).filter(Boolean);
+  }
+
+  function normalizeRopeTeam(team, index){
+    if(!team || typeof team !== "object") return null;
+    const id = typeof team.id === "string" && team.id ? team.id : window.EPSMatrix.genId(`ropeTeam${index||""}`);
+    const memberIds = Array.isArray(team.memberIds) ? team.memberIds.map(String).filter(Boolean) : [];
+    const rolesByStudentId = {};
+    if(team.rolesByStudentId && typeof team.rolesByStudentId === "object"){
+      Object.entries(team.rolesByStudentId).forEach(([studentId, roleKey])=>{
+        if(studentId && typeof roleKey === "string"){
+          rolesByStudentId[studentId] = roleKey;
+        }
+      });
+    }
+    const groupKey = normalizeGroupKey(team.groupKey || team.groupTag || id);
+    return {
+      id,
+      groupKey,
+      name: typeof team.name === "string" ? team.name : "",
+      memberIds,
+      rolesByStudentId,
+      evaluations: normalizeRopeEvaluations(team.evaluations),
+      safetyFaults: Number(team.safetyFaults) || 0
+    };
+  }
+
+  function normalizeRopeEvaluations(entries){
+    if(!Array.isArray(entries)) return [];
+    return entries.map((entry)=>normalizeRopeEvaluation(entry)).filter(Boolean);
+  }
+
+  function normalizeRopeEvaluation(entry){
+    if(!entry || typeof entry !== "object") return null;
+    const scores = {};
+    if(entry.scores && typeof entry.scores === "object"){
+      Object.entries(entry.scores).forEach(([studentId, payload])=>{
+        if(!studentId) return;
+        const normalized = normalizeStudentRopeScore(payload);
+        if(normalized){
+          scores[studentId] = normalized;
+        }
+      });
+    }
+    return {
+      id: typeof entry.id === "string" && entry.id ? entry.id : window.EPSMatrix.genId("ropeEval"),
+      createdAt: typeof entry.createdAt === "number" ? entry.createdAt : Date.parse(entry.createdAt) || Date.now(),
+      scores,
+      safetyFaultDelta: Number(entry.safetyFaultDelta) || 0
+    };
+  }
+
+  function normalizeStudentRopeScore(payload){
+    const roles = {};
+    if(payload && typeof payload === "object"){
+      if(payload.roles && typeof payload.roles === "object"){
+        Object.entries(payload.roles).forEach(([roleKey, value])=>{
+          if(!roleKey) return;
+          roles[roleKey] = {
+            observables: normalizeRopeScoreObservables(value?.observables)
+          };
+        });
+      }else if(typeof payload.role === "string"){
+        const roleKey = payload.role;
+        roles[roleKey] = {
+          observables: normalizeRopeScoreObservables(payload.observables)
+        };
+      }
+    }
+    return {roles};
+  }
+
+  function normalizeRopeScoreObservables(list){
+    if(!Array.isArray(list)) return [];
+    return list.map((obs)=>({
+      id: typeof obs?.id === "string" && obs.id ? obs.id : window.EPSMatrix.genId("ropeObs"),
+      label: typeof obs?.label === "string" ? obs.label : "",
+      value: normalizeRopeObservableValue(obs?.value)
+    }));
+  }
+
+  function normalizeRopeObservableValue(value){
+    if(value === null || typeof value === "undefined") return "";
+    if(typeof value === "string") return value;
+    if(typeof value === "number") return String(value);
+    if(typeof value === "boolean") return value ? "1" : "";
+    return "";
   }
 
   async function createEvaluationFromField(fieldId){
@@ -1510,6 +1913,7 @@
       evaluation.data.ropeMode.enabled = !evaluation.data.ropeMode.enabled;
       persist();
       renderRopePanel();
+      renderTable();
     });
     ropeSizeSelect?.addEventListener("change", ()=>{
       const value = ropeSizeSelect.value === "3" ? 3 : 2;
@@ -1532,47 +1936,54 @@
 
   function setupModesBar(){
     if(!modeButtons.length) return;
-    const stored = getStoredModePreference();
-    const fallback = stored || (evaluation.data.ropeMode?.enabled ? "rope" : "terrain");
-    openMode(fallback, true);
+    closeModePanels();
     modeButtons.forEach((btn)=>{
       btn.addEventListener("click", ()=>{
-        openMode(btn.dataset.modeBtn || "terrain");
+        const key = btn.dataset.modeBtn;
+        if(!key) return;
+        if(btn.classList.contains("active")){
+          closeModePanels();
+          storeModePreference("");
+          return;
+        }
+        openMode(key);
       });
     });
   }
 
-  function getStoredModePreference(){
-    try{
-      return localStorage.getItem(LAST_MODE_STORAGE_KEY) || "";
-    }catch(_e){
-      return "";
-    }
-  }
-
   function openMode(modeKey, skipPersist){
-    let key = modeKey;
-    if(!modePanels[key]){
-      key = "terrain";
-    }
+    if(!modePanels[modeKey]) return;
     modeButtons.forEach((btn)=>{
-      const isActive = btn.dataset.modeBtn === key;
-      btn.classList.toggle("active", isActive);
+      btn.classList.toggle("active", btn.dataset.modeBtn === modeKey);
     });
     Object.entries(modePanels).forEach(([name, panel])=>{
-      if(!panel) return;
-      panel.classList.toggle("hidden", name !== key);
+      panel?.classList.toggle("hidden", name !== modeKey);
     });
     if(!skipPersist){
-      try{
-        localStorage.setItem(LAST_MODE_STORAGE_KEY, key);
-      }catch(_e){}
+      storeModePreference(modeKey);
     }
-    if(key === "terrain"){
+    if(modeKey === "terrain"){
       renderTerrainSection();
-    }else if(key === "rope"){
+    }else if(modeKey === "rope"){
       renderRopePanel();
     }
+    renderTable();
+  }
+
+  function closeModePanels(){
+    modeButtons.forEach((btn)=>btn.classList.remove("active"));
+    Object.values(modePanels).forEach((panel)=>panel?.classList.add("hidden"));
+    renderTable();
+  }
+
+  function storeModePreference(value){
+    try{
+      if(value){
+        localStorage.setItem(LAST_MODE_STORAGE_KEY, value);
+      }else{
+        localStorage.removeItem(LAST_MODE_STORAGE_KEY);
+      }
+    }catch(_e){}
   }
 
   function clampTerrainCountInput(value){
@@ -1832,6 +2243,34 @@ function assignGroupsRoundRobin(count){
       const count = Array.isArray(list) ? list.length : 0;
       span.textContent = `${count} observable${count>1?"s":""}`;
     });
+    const ropeGroups = getAllGroupIndexes().map((index)=>({
+      key: String(index),
+      label: formatGroupLabel(index),
+      size: getStudentsForGroupKey(String(index)).length
+    })).filter((entry)=>Boolean(entry.key));
+    if(ropeTeamSelect){
+      const placeholder = '<option value="">Sélectionner une cordée</option>';
+      const options = ropeGroups.map((entry)=>`<option value="${entry.key}">${escapeHtml(entry.label)}</option>`).join("");
+      ropeTeamSelect.innerHTML = `${placeholder}${options}`;
+      ropeTeamSelect.disabled = !enabled || !ropeGroups.length;
+      if(!enabled){
+        ropeTeamSelect.value = "";
+      }
+    }
+    if(btnManageRopeTeams){
+      btnManageRopeTeams.disabled = !enabled;
+      btnManageRopeTeams.classList.toggle("disabled", !enabled);
+    }
+    if(btnToggleRopeConfig){
+      btnToggleRopeConfig.disabled = !enabled;
+    }
+    if(ropeTeamEmptyHint){
+      ropeTeamEmptyHint.classList.toggle("hidden", !enabled || ropeGroups.length > 0);
+    }
+    if(!enabled){
+      ropeConfigExpanded = false;
+    }
+    applyRopeConfigPanelVisibility();
   }
 
   function openRoleConfig(roleKey){
@@ -1865,14 +2304,39 @@ function assignGroupsRoundRobin(count){
       ropeObservableList.innerHTML = '<li class="muted">Aucun observable.</li>';
       return;
     }
-    ropeObservableList.innerHTML = list.map((entry, index)=>`<li>
-        <input type="text" value="${escapeHtml(entry)}" data-obs-index="${index}" />
+    ropeObservableList.innerHTML = list.map((entry, index)=>{
+      const preset = entry?.scale?.preset || ROPE_DEFAULT_SCALE;
+      const customField = buildRopeObservableCustomField(entry, index);
+      return `<li>
+        <div class="ropeObservableFields">
+          <input type="text" value="${escapeHtml(entry?.label || "")}" data-obs-index="${index}" placeholder="Libellé de l'observable" />
+          <div class="ropeObservableScale">
+            <label class="muted tinyCaps">Échelle</label>
+            <select data-obs-scale="${index}">
+              ${buildRopeScaleOptions(preset)}
+            </select>
+            ${customField}
+          </div>
+        </div>
         <button type="button" data-remove-index="${index}" aria-label="Supprimer">×</button>
-      </li>`).join("");
+      </li>`;
+    }).join("");
     ropeObservableList.querySelectorAll("input[data-obs-index]").forEach((input)=>{
       input.addEventListener("change", (event)=>{
         const idx = Number(event.target.dataset.obsIndex);
         updateRopeObservable(idx, event.target.value);
+      });
+    });
+    ropeObservableList.querySelectorAll("select[data-obs-scale]").forEach((select)=>{
+      select.addEventListener("change", (event)=>{
+        const idx = Number(event.target.dataset.obsScale);
+        updateRopeObservableScale(idx, event.target.value);
+      });
+    });
+    ropeObservableList.querySelectorAll("input[data-obs-custom]").forEach((input)=>{
+      input.addEventListener("change", (event)=>{
+        const idx = Number(event.target.dataset.obsCustom);
+        updateRopeObservableCustomOptions(idx, event.target.value);
       });
     });
     ropeObservableList.querySelectorAll("button[data-remove-index]").forEach((btn)=>{
@@ -1883,14 +2347,38 @@ function assignGroupsRoundRobin(count){
     });
   }
 
+  function buildRopeScaleOptions(selected){
+    return ROPE_SCALE_OPTIONS.map((opt)=>`<option value="${opt.value}" ${opt.value===selected?"selected":""}>${opt.label}</option>`).join("");
+  }
+
+  function buildRopeObservableCustomField(entry, index){
+    const scale = entry?.scale;
+    if(!scale){
+      return "";
+    }
+    if(scale.type === "text"){
+      return '<p class="muted smallText">Commentaire libre</p>';
+    }
+    if(scale.preset === "CUSTOM"){
+      const raw = typeof scale.rawOptions === "string" ? scale.rawOptions : "";
+      return `<input type="text" data-obs-custom="${index}" placeholder="ex: ✅, ❌, ⚠️" value="${escapeHtml(raw)}" />`;
+    }
+    const preview = Array.isArray(scale.options) ? scale.options.map((opt)=>opt.label).join(" • ") : "";
+    return preview ? `<p class="muted smallText">${escapeHtml(preview)}</p>` : "";
+  }
+
   function ensureRoleObservables(roleKey){
     const mode = evaluation.data.ropeMode || createDefaultRopeMode();
     const map = mode.settings?.observablesByRole || {};
-    if(!Array.isArray(map[roleKey])){
-      map[roleKey] = [];
+    let list = map[roleKey];
+    if(!Array.isArray(list)){
+      list = [];
+    }else{
+      list = list.map((entry)=>normalizeObservableConfig(entry)).filter(Boolean);
     }
+    map[roleKey] = list;
     evaluation.data.ropeMode.settings.observablesByRole = map;
-    return map[roleKey];
+    return list;
   }
 
   function addRopeObservableFromInput(){
@@ -1898,7 +2386,10 @@ function assignGroupsRoundRobin(count){
     const value = (ropeObservableInput?.value || "").trim();
     if(!value) return;
     const list = ensureRoleObservables(activeRopeRole);
-    list.push(value);
+    const created = normalizeObservableConfig(value);
+    if(created){
+      list.push(created);
+    }
     ropeObservableInput.value = "";
     persist();
     renderRopeObservables();
@@ -1909,8 +2400,38 @@ function assignGroupsRoundRobin(count){
     if(!activeRopeRole) return;
     const list = ensureRoleObservables(activeRopeRole);
     if(index < 0 || index >= list.length) return;
-    list[index] = (rawValue || "").trim();
+    list[index] = normalizeObservableConfig({
+      ...(list[index] || {}),
+      label: (rawValue || "").trim()
+    });
     persist();
+    renderRopePanel();
+  }
+
+  function updateRopeObservableScale(index, preset){
+    if(!activeRopeRole) return;
+    const list = ensureRoleObservables(activeRopeRole);
+    if(index < 0 || index >= list.length) return;
+    const entry = list[index] || {};
+    entry.scale = createScaleFromPreset(preset || ROPE_DEFAULT_SCALE, entry.scale?.rawOptions || "");
+    list[index] = normalizeObservableConfig(entry);
+    persist();
+    renderRopeObservables();
+    renderRopePanel();
+  }
+
+  function updateRopeObservableCustomOptions(index, rawValue){
+    if(!activeRopeRole) return;
+    const list = ensureRoleObservables(activeRopeRole);
+    if(index < 0 || index >= list.length) return;
+    const entry = list[index];
+    if(!entry?.scale || entry.scale.preset !== "CUSTOM"){
+      return;
+    }
+    entry.scale = createScaleFromPreset("CUSTOM", rawValue || "");
+    list[index] = normalizeObservableConfig(entry);
+    persist();
+    renderRopeObservables();
     renderRopePanel();
   }
 
@@ -1922,6 +2443,351 @@ function assignGroupsRoundRobin(count){
     persist();
     renderRopeObservables();
     renderRopePanel();
+  }
+
+  function toggleRopeConfigPanel(force){
+    if(!evaluation.data.ropeMode?.enabled){
+      window.alert("Active le mode cordée pour configurer les observables.");
+      return;
+    }
+    ropeConfigExpanded = typeof force === "boolean" ? force : !ropeConfigExpanded;
+    applyRopeConfigPanelVisibility();
+  }
+
+  function applyRopeConfigPanelVisibility(){
+    if(!ropeConfigPanel) return;
+    const enabled = Boolean(evaluation.data.ropeMode?.enabled);
+    const shouldShow = enabled && ropeConfigExpanded;
+    ropeConfigPanel.classList.toggle("hidden", !shouldShow);
+    if(btnToggleRopeConfig){
+      btnToggleRopeConfig.textContent = shouldShow ? "Masquer les observables" : "Configurer les observables";
+    }
+  }
+
+  function handleRopeTeamSelection(event){
+    const select = event?.target || ropeTeamSelect;
+    if(!select) return;
+    const groupKey = select.value;
+    if(!groupKey) return;
+    if(!evaluation.data.ropeMode?.enabled){
+      window.alert("Active le mode cordée pour évaluer une cordée.");
+      select.value = "";
+      return;
+    }
+    openRopeEvaluation(groupKey);
+    renderTable();
+    select.value = "";
+  }
+
+  function handleManageRopeTeams(){
+    if(!evaluation.data.ropeMode?.enabled){
+      window.alert("Active le mode cordée pour gérer les cordées.");
+      return;
+    }
+    window.alert("Les cordées utilisent directement les groupes (T1, T2...). Ajuste les groupes élèves pour modifier les cordées.");
+  }
+
+  function openRopeEvaluation(groupKey){
+    if(!ropeEvalModal) return;
+    if(!evaluation.data.ropeMode?.enabled){
+      window.alert("Active le mode cordée pour évaluer une cordée.");
+      return;
+    }
+    const members = getStudentsForGroupKey(groupKey);
+    if(!members.length){
+      window.alert("Aucun élève n'est associé à cette cordée.");
+      return;
+    }
+    const team = ensureRopeTeamForGroup(groupKey);
+    team.memberIds = members.map((stu)=>stu.id);
+    activeRopeEvaluation = {
+      groupKey,
+      safetyDelta: 0,
+      scores: {}
+    };
+    try{
+      sessionStorage.removeItem(ROPE_SAFETY_SESSION_KEY);
+    }catch(_err){}
+    if(ropeEvalTitle){
+      const label = formatGroupLabel(groupKey) || groupKey;
+      ropeEvalTitle.textContent = `Évaluation – Cordée ${label}`;
+    }
+    if(btnRopeSafetyFault){
+      btnRopeSafetyFault.disabled = false;
+      btnRopeSafetyFault.textContent = ropeSafetyButtonDefaultLabel;
+    }
+    const summary = members.map((stu)=>stu.name).join(" • ");
+    if(ropeEvalTeamMeta){
+      ropeEvalTeamMeta.textContent = summary;
+    }
+    ropeEvalTeam = team;
+    renderRopeEvalGrid();
+    updateRopeSafetyLabel(team);
+    ropeEvalModal.classList.remove("hidden");
+    ropeEvalModal.setAttribute("aria-hidden", "false");
+  }
+
+  function renderRopeEvalGrid(){
+    if(!ropeEvalList){
+      return;
+    }
+    if(!activeRopeEvaluation){
+      ropeEvalList.innerHTML = "";
+      return;
+    }
+    const members = activeRopeEvaluation.groupKey ? getStudentsForGroupKey(activeRopeEvaluation.groupKey) : [];
+    const columns = buildRopeGridColumns();
+    const headerTop = `<tr><th rowspan="2">Élève</th>${columns.map((group)=>`<th class="obs-role-${group.roleKey}" colspan="${Math.max(1, group.observables.length)}">${escapeHtml(group.label)}</th>`).join("")}</tr>`;
+    const headerBottom = `<tr>${columns.map((group)=>group.observables.map((obs)=>`<th class="obs-role-${group.roleKey}">${escapeHtml(obs.label)}</th>`).join("")).join("")}</tr>`;
+    const rows = members.map((stu)=>{
+      const studentCell = `<td><div class="ropeEvalStudentHeader"><strong>${escapeHtml(stu.name)}</strong></div></td>`;
+      const roleCells = columns.map((group)=>{
+        return group.observables.map((obs)=>buildRopeEvalCell(stu.id, group.roleKey, obs)).join("");
+      }).join("");
+      return `<tr>${studentCell}${roleCells}</tr>`;
+    }).join("");
+    ropeEvalList.innerHTML = `<table class="ropeEvalGrid"><thead>${headerTop}${headerBottom}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function buildRopeEvalCell(studentId, roleKey, obs){
+    if(obs.isPlaceholder){
+      return `<td class="obs-role-${roleKey}"><span class="muted smallText">—</span></td>`;
+    }
+    const payload = ensureRopeScorePayload(studentId, roleKey, ropeEvalTeam);
+    const value = payload?.observables?.find((entry)=>entry.id === obs.id)?.value || "";
+    const control = buildRopeEvalControl(studentId, roleKey, obs, value);
+    return `<td class="obs-role-${roleKey}">${control}</td>`;
+  }
+
+  function buildRopeEvalControl(studentId, roleKey, obs, currentValue){
+    const scale = obs.scale?.type ? obs.scale : createScaleFromPreset(ROPE_DEFAULT_SCALE);
+    if(scale.type === "text"){
+      return `<input type="text" data-rope-input="1" data-scale="text" data-role="${roleKey}" data-student="${studentId}" data-obs-id="${obs.id}" value="${escapeHtml(currentValue||"")}" placeholder="Commentaire" />`;
+    }
+    const options = Array.isArray(scale.options) ? scale.options : [];
+    const selectOptions = [`<option value="">—</option>`].concat(options.map((opt)=>`<option value="${escapeHtml(opt.value)}" ${opt.value===currentValue?"selected":""}>${escapeHtml(opt.label)}</option>`)).join("");
+    return `<select data-rope-input="1" data-scale="select" data-role="${roleKey}" data-student="${studentId}" data-obs-id="${obs.id}">${selectOptions}</select>`;
+  }
+
+  function ensureRopeScorePayload(studentId, roleKey, team){
+    if(!activeRopeEvaluation) return null;
+    activeRopeEvaluation.scores = activeRopeEvaluation.scores || {};
+    const studentEntry = activeRopeEvaluation.scores[studentId] || {roles:{}};
+    activeRopeEvaluation.scores[studentId] = studentEntry;
+    studentEntry.roles = studentEntry.roles || {};
+    const config = getObservablesForRole(roleKey);
+    let payload = studentEntry.roles[roleKey];
+    if(!payload){
+      const previous = getLastStudentRopeScores(team, studentId, roleKey);
+      payload = {
+        observables: config.map((obs)=>({
+          id: obs.id,
+          label: obs.label,
+          value: getPreviousObservableValue(previous, obs)
+        }))
+      };
+      studentEntry.roles[roleKey] = payload;
+      return payload;
+    }
+    const next = config.map((obs)=>{
+      const existing = (payload.observables || []).find((entry)=>entry.id === obs.id);
+      return {
+        id: obs.id,
+        label: obs.label,
+        value: typeof existing?.value === "string" ? existing.value : (existing?.value ?? "")
+      };
+    });
+    payload.observables = next;
+    studentEntry.roles[roleKey] = payload;
+    return payload;
+  }
+
+  function getPreviousObservableValue(previousPayload, observable){
+    if(!previousPayload?.observables) return "";
+    const entry = previousPayload.observables.find((obs)=>obs.id === observable.id) || previousPayload.observables.find((obs)=>obs.label === observable.label);
+    if(!entry) return "";
+    if(typeof entry.value === "string") return entry.value;
+    if(typeof entry.value === "number") return String(entry.value);
+    return "";
+  }
+
+  function buildRopeGridColumns(){
+    return ROPE_ROLE_ORDER.map((roleKey)=>{
+      const roleLabel = ROPE_ROLE_LABELS[roleKey] || roleKey;
+      const list = getObservablesForRole(roleKey);
+      const hasObservables = list.length > 0;
+      const observables = hasObservables ? list.map((entry)=>({
+        id: entry.id,
+        label: entry.label || `${roleLabel}`,
+        scale: entry.scale,
+        isPlaceholder:false
+      })) : [{
+        id:`placeholder-${roleKey}`,
+        label:"—",
+        scale:null,
+        isPlaceholder:true
+      }];
+      return {
+        roleKey,
+        label: roleLabel,
+        observables,
+        hasObservables
+      };
+    });
+  }
+
+  function handleRopeEvalChange(event){
+    const target = event.target;
+    if(!target) return;
+    if(target.dataset.ropeInput === "1"){
+      updateRopeEvalValue(target);
+    }
+  }
+
+  function updateRopeEvalValue(target){
+    if(!activeRopeEvaluation) return;
+    const studentId = target.dataset.student;
+    const roleKey = target.dataset.role;
+    const obsId = target.dataset.obsId;
+    if(!studentId || !roleKey || !obsId) return;
+    const payload = ensureRopeScorePayload(studentId, roleKey, ropeEvalTeam);
+    if(!payload) return;
+    payload.observables = payload.observables || [];
+    let entry = payload.observables.find((obs)=>obs.id === obsId);
+    if(!entry){
+      entry = {id: obsId, label: "", value:""};
+      payload.observables.push(entry);
+    }
+    if(target.dataset.scale === "text"){
+      entry.value = target.value || "";
+      return;
+    }
+    entry.value = target.value || "";
+  }
+
+  function handleRopeSafetyFault(){
+    if(!activeRopeEvaluation) return;
+    const groupKey = activeRopeEvaluation.groupKey;
+    if(!groupKey) return;
+    try{
+      const alreadyClicked = sessionStorage.getItem(ROPE_SAFETY_SESSION_KEY);
+      if(alreadyClicked === groupKey){
+        window.alert("Défaut de sécurité déjà ajouté lors de cette session.");
+        return;
+      }
+    }catch(_err){}
+    const team = ensureRopeTeamForGroup(groupKey);
+    if(!team) return;
+    activeRopeEvaluation.safetyDelta = (activeRopeEvaluation.safetyDelta || 0) + 1;
+    team.safetyFaults = Number(team.safetyFaults || 0) + 1;
+    if(btnRopeSafetyFault){
+      btnRopeSafetyFault.disabled = true;
+      btnRopeSafetyFault.textContent = "Défaut ajouté";
+    }
+    try{
+      sessionStorage.setItem(ROPE_SAFETY_SESSION_KEY, groupKey);
+    }catch(_err2){}
+    persist();
+    renderTable();
+    updateRopeSafetyLabel(team);
+  }
+
+  function updateRopeSafetyLabel(team){
+    if(!ropeEvalSafetyLabel) return;
+    const total = Number(team?.safetyFaults || 0);
+    ropeEvalSafetyLabel.textContent = `Défauts cumulés : ${total}`;
+  }
+
+  function closeRopeEvaluationModal(){
+    if(!ropeEvalModal) return;
+    ropeEvalModal.classList.add("hidden");
+    ropeEvalModal.setAttribute("aria-hidden", "true");
+    if(ropeEvalList){
+      ropeEvalList.innerHTML = "";
+    }
+    if(ropeEvalTeamMeta){
+      ropeEvalTeamMeta.textContent = "";
+    }
+    if(ropeEvalSafetyLabel){
+      ropeEvalSafetyLabel.textContent = "";
+    }
+    if(btnRopeSafetyFault){
+      btnRopeSafetyFault.disabled = false;
+      btnRopeSafetyFault.textContent = ropeSafetyButtonDefaultLabel;
+    }
+    try{
+      sessionStorage.removeItem(ROPE_SAFETY_SESSION_KEY);
+    }catch(_err){}
+    ropeEvalTeam = null;
+    activeRopeEvaluation = null;
+  }
+
+  function saveRopeEvaluation(){
+    if(!activeRopeEvaluation) return;
+    const team = ensureRopeTeamForGroup(activeRopeEvaluation.groupKey);
+    if(!team){
+      window.alert("Cordée introuvable.");
+      return;
+    }
+    const scores = {};
+    Object.entries(activeRopeEvaluation.scores || {}).forEach(([studentId, payload])=>{
+      if(!studentId) return;
+      const roles = {};
+      Object.entries(payload.roles || {}).forEach(([roleKey, roleData])=>{
+        if(!roleKey) return;
+        roles[roleKey] = {
+          observables: (roleData.observables || []).map((obs)=>({
+            id: obs.id,
+            label: obs.label,
+            value: formatRopeStoredValue(obs.value)
+          }))
+        };
+      });
+      scores[studentId] = {roles};
+    });
+    team.evaluations = Array.isArray(team.evaluations) ? team.evaluations : [];
+    team.evaluations.unshift({
+      id: window.EPSMatrix.genId("ropeEval"),
+      teamId: team.id,
+      groupKey: team.groupKey,
+      createdAt: Date.now(),
+      scores,
+      safetyFaultDelta: activeRopeEvaluation.safetyDelta || 0
+    });
+    persist();
+    renderTable();
+    closeRopeEvaluationModal();
+  }
+
+  function formatRopeStoredValue(value){
+    if(typeof value === "string") return value;
+    if(typeof value === "number") return String(value);
+    return "";
+  }
+
+  function getObservablesForRole(roleKey){
+    const map = evaluation.data.ropeMode?.settings?.observablesByRole || {};
+    const list = map[roleKey];
+    if(!Array.isArray(list)) return [];
+    return list.map((entry)=>normalizeObservableConfig(entry)).filter(Boolean);
+  }
+
+  function getLastStudentRopeScores(team, studentId, roleFilter){
+    if(!team || !studentId) return null;
+    const entry = (team.evaluations || []).find((ev)=>{
+      const score = ev?.scores?.[studentId];
+      if(!score) return false;
+      if(roleFilter){
+        return Boolean(score.roles?.[roleFilter]);
+      }
+      return true;
+    });
+    if(!entry) return null;
+    const payload = entry.scores[studentId];
+    if(roleFilter){
+      return payload?.roles?.[roleFilter] || null;
+    }
+    return payload || null;
   }
 
   function buildTerrainGroups(){
@@ -1947,6 +2813,16 @@ function assignGroupsRoundRobin(count){
       for(let i=1;i<=fallback;i++){ set.add(i); }
     }
     return Array.from(set).sort((a,b)=>a-b).slice(0, MAX_TERRAINS);
+  }
+
+  function getStudentsForGroupKey(groupKey){
+    const target = Number(groupKey);
+    if(!target) return [];
+    return evaluation.data.students.filter((stu)=>{
+      if(stu.absent || stu.dispense) return false;
+      const parsed = window.EPSMatrix.parseGroupIndex(stu.groupTag);
+      return parsed === target;
+    });
   }
 
   function getMaxGroupIndex(){
@@ -1998,18 +2874,8 @@ function assignGroupsRoundRobin(count){
 
   function formatGroupLabel(value){
     if(value === null || typeof value === "undefined") return "";
-    const parsed = window.EPSMatrix.parseGroupIndex ? window.EPSMatrix.parseGroupIndex(value) : Number(value);
-    if(Number.isFinite(parsed) && parsed > 0){
-      return String(parsed);
-    }
-    if(typeof value === "number" && Number.isFinite(value)){
-      return String(value);
-    }
-    const match = String(value).match(/(\d+)/);
-    if(match){
-      return match[1];
-    }
-    return String(value);
+    const normalized = normalizeGroupKey(value);
+    return normalized || String(value);
   }
 
   function formatStartBadge(tag){
@@ -2208,9 +3074,14 @@ function assignGroupsRoundRobin(count){
     </article>`;
   }
 
+  function getStudentById(id){
+    if(!id) return null;
+    return evaluation.data.students.find((stu)=>stu.id === id) || null;
+  }
+
   function findStudentName(id){
     if(!id) return "—";
-    const student = evaluation.data.students.find((stu)=>stu.id === id);
+    const student = getStudentById(id);
     return student ? escapeHtml(student.name) : "—";
   }
 
