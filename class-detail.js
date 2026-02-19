@@ -98,6 +98,12 @@
       const normalizedId = lf.id;
       const evals = cls.evaluations.filter((ev)=>normalizeField(ev.learningField) === lf.id && (showArchived || !ev.archived));
       const count = evals.length;
+      const isCompetencyField = /^CA[1-5]$/i.test(lf.id);
+      const descText = (lf.desc || "").trim();
+      const titleText = isCompetencyField
+        ? `${lf.id} – ${descText}`
+        : lf.title;
+      const metaHTML = normalizedId === "NOTE" ? `<div class="folderMeta">${lf.desc}</div>` : "";
       const primaryBtn = normalizedId === "NOTE"
         ? `<a class="btn primary" href="notes.html?class=${cls.id}">Ouvrir le bloc note</a>`
         : `<a class="btn primary" href="evaluation.html?class=${cls.id}&field=${lf.id}">Créer une évaluation</a>`;
@@ -106,8 +112,8 @@
         : `<button class="btn secondary" type="button" data-action="show" data-field="${lf.id}" ${count?"":"disabled"}>Voir (${count})</button>`;
       return `<div class="folder" style="cursor:default;--folder-color:${color};--folder-soft:${soft};">
         <div class="folderIcon">📂</div>
-        <div class="folderTitle">${lf.title}</div>
-        <div class="folderMeta">${lf.desc}</div>
+        <div class="folderTitle">${titleText}</div>
+        ${metaHTML}
         <div class="folderActions" style="gap:8px;flex-wrap:wrap;">
           ${primaryBtn}
           ${secondaryBtn}
