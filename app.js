@@ -175,6 +175,7 @@ function normalizeEvaluation(ev, cls){
     ensureTerrainStudentFields(stu);
   });
   const terrainMode = normalizeTerrainMode(ev.data?.terrainMode, students);
+  const ropeMode = ev.data?.ropeMode ? structuredClone(ev.data.ropeMode) : null;
   const isArchived = ev.archived === true || ev.status === "archived";
   return {
     id: ev.id || genId("eval"),
@@ -192,7 +193,8 @@ function normalizeEvaluation(ev, cls){
       scoring: normalizeScoringForCriteria(criteria, ev.data?.scoring),
       savedAt: ev.data?.savedAt || Date.now(),
       showNote: ev.data?.showNote === true,
-      terrainMode
+      terrainMode,
+      ropeMode
     }
   };
 }

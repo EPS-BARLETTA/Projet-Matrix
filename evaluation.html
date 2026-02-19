@@ -144,7 +144,7 @@
         </div>
       </div>
     </section>
-    <section class="rotationPanel" id="rotationPanel">
+    <section class="rotationPanel hidden" id="rotationPanel">
       <div class="sectionHeader">
         <div>
           <h3>Rotation en cours</h3>
@@ -207,15 +207,17 @@
         <h2>Configurer la grille</h2>
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
-      <p class="muted">Sélectionne les champs de base à afficher puis compose tes critères.</p>
-      <section class="baseFieldsPanel">
-        <h3>Champs de base</h3>
-        <div id="baseFieldOptions" class="baseFieldGrid"></div>
-      </section>
-      <section>
-        <h3>Critères</h3>
-        <div id="configList" class="criteriaList"></div>
-      </section>
+      <div class="modalScrollable">
+        <p class="muted">Sélectionne les champs de base à afficher puis compose tes critères.</p>
+        <section class="baseFieldsPanel">
+          <h3>Champs de base</h3>
+          <div id="baseFieldOptions" class="baseFieldGrid"></div>
+        </section>
+        <section>
+          <h3>Critères</h3>
+          <div id="configList" class="criteriaList"></div>
+        </section>
+      </div>
       <div class="actions modalActions">
         <button class="btn secondary" id="btnAddCriterion" type="button">+ Ajouter un critère</button>
         <button class="btn secondary" id="btnChatGPT" type="button">Pense-bête ChatGPT</button>
@@ -232,8 +234,10 @@
         <h2>Notation</h2>
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
-      <p class="muted">Attribue des points à chaque option. Ces valeurs alimentent automatiquement la note sur 20.</p>
-      <div id="scoringList" class="criteriaList"></div>
+      <div class="modalScrollable">
+        <p class="muted">Attribue des points à chaque option. Ces valeurs alimentent automatiquement la note sur 20.</p>
+        <div id="scoringList" class="criteriaList"></div>
+      </div>
       <div class="actions modalActions">
         <span class="flex-fill"></span>
         <button class="btn secondary" data-close-modal type="button">Annuler</button>
@@ -248,8 +252,10 @@
         <h2>Pense-bête ChatGPT</h2>
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
-      <p class="muted">Copie le prompt ci-dessous pour générer des critères conformes aux derniers programmes EPS.</p>
-      <textarea id="chatgptPrompt" style="width:100%;min-height:160px;border-radius:18px;border:1px solid var(--line);padding:16px;font-family:inherit;"></textarea>
+      <div class="modalScrollable">
+        <p class="muted">Copie le prompt ci-dessous pour générer des critères conformes aux derniers programmes EPS.</p>
+        <textarea id="chatgptPrompt" style="width:100%;min-height:160px;border-radius:18px;border:1px solid var(--line);padding:16px;font-family:inherit;"></textarea>
+      </div>
       <div class="actions" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
         <button class="btn secondary" id="btnCopyPrompt" type="button">Copier le prompt</button>
         <button class="btn primary" id="btnOpenChatGPT" type="button">Ouvrir chatgpt.com</button>
@@ -263,16 +269,18 @@
         <h2 id="playerModalTitle">Fiche terrain</h2>
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
-      <p class="muted" id="playerModalMeta"></p>
-      <label>Note libre
-        <textarea id="playerNoteInput" style="width:100%;min-height:140px;border-radius:16px;border:1px solid var(--line);padding:12px;font-family:inherit;"></textarea>
-      </label>
-      <label>Rôle
-        <select id="playerRoleSelect">
-          <option value="player">Joueur / Joueuse</option>
-          <option value="ref">Arbitre</option>
-        </select>
-      </label>
+      <div class="modalScrollable">
+        <p class="muted" id="playerModalMeta"></p>
+        <label>Note libre
+          <textarea id="playerNoteInput" style="width:100%;min-height:140px;border-radius:16px;border:1px solid var(--line);padding:12px;font-family:inherit;"></textarea>
+        </label>
+        <label>Rôle
+          <select id="playerRoleSelect">
+            <option value="player">Joueur / Joueuse</option>
+            <option value="ref">Arbitre</option>
+          </select>
+        </label>
+      </div>
       <div class="actions modalActions">
         <span class="flex-fill"></span>
         <button class="btn secondary" type="button" data-close-modal>Fermer</button>
@@ -287,11 +295,13 @@
         <h2 id="studentSummaryTitle">Bilan élève</h2>
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
-      <p class="muted" id="studentSummaryMeta"></p>
-      <div class="studentSummaryStats" id="studentSummaryStats"></div>
-      <div class="studentMatches">
-        <h4>Matches</h4>
-        <ul id="studentMatchesList"></ul>
+      <div class="modalScrollable">
+        <p class="muted" id="studentSummaryMeta"></p>
+        <div class="studentSummaryStats" id="studentSummaryStats"></div>
+        <div class="studentMatches">
+          <h4>Matches</h4>
+          <ul id="studentMatchesList"></ul>
+        </div>
       </div>
     </div>
   </div>
@@ -302,10 +312,12 @@
         <h2 id="ropeModalTitle">Observables</h2>
         <button class="iconButton" type="button" id="btnCloseRopeModal" aria-label="Fermer">×</button>
       </div>
-      <ul id="ropeObservableList" class="ropeObservableList"></ul>
-      <div class="ropeObservableAdd">
-        <input type="text" id="ropeObservableInput" placeholder="Nouvel observable" aria-label="Nouvel observable" />
-        <button class="btn primary" type="button" id="btnAddRopeObservable">Ajouter</button>
+      <div class="modalScrollable">
+        <ul id="ropeObservableList" class="ropeObservableList"></ul>
+        <div class="ropeObservableAdd">
+          <input type="text" id="ropeObservableInput" placeholder="Nouvel observable" aria-label="Nouvel observable" />
+          <button class="btn primary" type="button" id="btnAddRopeObservable">Ajouter</button>
+        </div>
       </div>
       <div class="actions modalActions">
         <span class="flex-fill"></span>
@@ -320,9 +332,11 @@
         <h2 id="ropeEvalTitle">Évaluation cordée</h2>
         <button class="iconButton" type="button" id="btnCloseRopeEval" aria-label="Fermer">×</button>
       </div>
-      <div id="ropeEvalTeamMeta" class="ropeEvalMeta"></div>
-      <div class="ropeEvalGridWrapper">
-        <div id="ropeEvalList" class="ropeEvalList"></div>
+      <div class="modalScrollable">
+        <div id="ropeEvalTeamMeta" class="ropeEvalMeta"></div>
+        <div class="ropeEvalGridWrapper">
+          <div id="ropeEvalList" class="ropeEvalList"></div>
+        </div>
       </div>
       <div class="ropeEvalFooter">
         <button class="btn secondary" type="button" id="btnRopeSafetyFault">Défaut de sécurité (+1)</button>

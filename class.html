@@ -19,6 +19,7 @@
       <div class="navButtons">
         <a class="btn secondary" href="classes.html">← Retour classes</a>
         <a class="btn secondary" href="create-class.html">Créer une classe</a>
+        <button class="btn secondary" id="btnEditClass" type="button">Modifier la classe</button>
         <button class="btn primary" id="btnNewEval">Créer une évaluation</button>
         <button class="btn secondary" id="btnBackupClass">Sauvegarder la classe</button>
         <button class="btn secondary" id="btnRestoreClassBackup">Récupérer une sauvegarde</button>
@@ -36,9 +37,52 @@
         <h2 id="evalModalTitle" style="margin:0;">Évaluations</h2>
         <button class="iconButton" id="closeEvalModal" aria-label="Fermer">×</button>
       </div>
-      <div id="evalModalContent" class="caList" style="margin-top:16px;"></div>
+      <div class="modalScrollable">
+        <div id="evalModalContent" class="caList" style="margin-top:16px;"></div>
+      </div>
     </div>
   </div>
+
+  <div class="modal hidden" id="editClassModal" role="dialog" aria-modal="true">
+    <div class="modalCard large">
+      <div class="modalHeader">
+        <h2 style="margin:0;">Modifier la classe</h2>
+        <button class="iconButton" type="button" id="btnCloseEditClass" aria-label="Fermer">×</button>
+      </div>
+      <form id="editClassForm" class="editClassForm modalScrollable">
+        <div class="formGrid">
+          <label>Nom
+            <input id="editClassName" required />
+          </label>
+          <label>Enseignant
+            <input id="editClassTeacher" />
+          </label>
+          <label>Site
+            <input id="editClassSite" />
+          </label>
+          <label>Couleur
+            <input id="editClassColor" type="color" value="#1c5bff" />
+          </label>
+        </div>
+        <section class="editStudentsSection">
+          <div class="editStudentsHeader">
+            <div>
+              <strong>Élèves</strong>
+              <p class="muted smallText" style="margin:2px 0 0;">Renomme, supprime ou ajoute des élèves. Les nouvelles évaluations utiliseront cette liste.</p>
+            </div>
+            <button class="btn secondary" type="button" id="btnAddStudentRow">+ Ajouter</button>
+          </div>
+          <div id="editStudentsList" class="editStudentsList"></div>
+        </section>
+        <div class="actions modalActions">
+          <span class="flex-fill"></span>
+          <button class="btn secondary" type="button" id="btnCancelEditClass">Annuler</button>
+          <button class="btn primary" type="submit">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <input type="file" id="hiddenEvalImporter" accept="application/json" class="hidden" />
   <input type="file" id="inputClassBackup" accept=".epsbackup.json,application/json" hidden />
 </body>

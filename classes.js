@@ -48,7 +48,10 @@
       const soft = withAlpha(color,"22");
       return `<div class="folder" draggable="true" data-id="${cls.id}" style="--folder-color:${color};--folder-soft:${soft}">
         <div class="folderIcon">📁</div>
-        <div class="folderTitle">${cls.name}</div>
+        <div class="folderTitleRow">
+          <div class="folderTitle">${cls.name}</div>
+          <button type="button" class="folderQuickAction" data-action="edit-class" data-id="${cls.id}">Modifier</button>
+        </div>
         <div class="folderMeta">${cls.students.length} élèves • ${cls.evaluations.length} évaluations</div>
       </div>`;
     }).join("");
@@ -68,6 +71,15 @@
         const target = folder.dataset.id;
         if(!dragged || dragged===target) return;
         reorder(dragged, target);
+      });
+    });
+    grid.querySelectorAll("[data-action='edit-class']").forEach((btn)=>{
+      btn.addEventListener("click", (event)=>{
+        event.stopPropagation();
+        const targetId = btn.dataset.id;
+        if(targetId){
+          window.location.href = `class.html?class=${encodeURIComponent(targetId)}&edit=1`;
+        }
       });
     });
   }

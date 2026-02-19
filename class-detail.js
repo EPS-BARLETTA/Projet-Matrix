@@ -23,10 +23,22 @@
   const inputClassBackup = document.getElementById("inputClassBackup");
   const classTitleEl = document.getElementById("classTitle");
   const classMetaEl = document.getElementById("classMeta");
+  const btnEditClass = document.getElementById("btnEditClass");
+  const editClassModal = document.getElementById("editClassModal");
+  const editClassForm = document.getElementById("editClassForm");
+  const editClassNameInput = document.getElementById("editClassName");
+  const editClassTeacherInput = document.getElementById("editClassTeacher");
+  const editClassSiteInput = document.getElementById("editClassSite");
+  const editClassColorInput = document.getElementById("editClassColor");
+  const btnAddStudentRow = document.getElementById("btnAddStudentRow");
+  const btnCloseEditClass = document.getElementById("btnCloseEditClass");
+  const btnCancelEditClass = document.getElementById("btnCancelEditClass");
+  const editStudentsList = document.getElementById("editStudentsList");
 
   closeEvalModal?.addEventListener("click", ()=>evalModal.classList.add("hidden"));
   evalModal?.addEventListener("click", (e)=>{ if(e.target === evalModal) evalModal.classList.add("hidden"); });
   updateClassHeader();
+  let studentDraft = [];
 
   const btnNewEval = document.getElementById("btnNewEval");
   btnNewEval.addEventListener("click", ()=>handleNewEvaluationRequest());
@@ -54,7 +66,30 @@
   });
   inputClassBackup?.addEventListener("change", handleClassBackupImport);
 
+  btnEditClass?.addEventListener("click", openEditClassModal);
+  btnCloseEditClass?.addEventListener("click", closeEditClassModal);
+  btnCancelEditClass?.addEventListener("click", closeEditClassModal);
+  editClassModal?.addEventListener("click", (event)=>{
+    if(event.target === editClassModal){
+      closeEditClassModal();
+    }
+  });
+  btnAddStudentRow?.addEventListener("click", addStudentRow);
+  editStudentsList?.addEventListener("input", handleStudentDraftInput);
+  editStudentsList?.addEventListener("click", handleStudentDraftClick);
+  editClassForm?.addEventListener("submit", handleEditClassSubmit);
+  document.addEventListener("keydown", (event)=>{
+    if(event.key === "Escape" && editClassModal && !editClassModal.classList.contains("hidden")){
+      closeEditClassModal();
+    }
+  });
+
   render();
+  if(params.get("edit") === "1"){
+    requestAnimationFrame(()=>{
+      openEditClassModal();
+    });
+  }
 
   function render(){
     caGrid.innerHTML = window.EPSMatrix.LEARNING_FIELDS.map((lf)=>{
@@ -86,6 +121,126 @@
       });
     });
 }
+
+  function openEditClassModal(){
+    if(!editClassModal) return;
+    editClassNameInput && (editClassNameInput.value = cls.name || "");
+    editClassTeacherInput && (editClassTeacherInput.value = cls.teacher || "");
+    editClassSiteInput && (editClassSiteInput.value = cls.site || "");
+    if(editClassColorInput){
+      editClassColorInput.value = cls.color || editClassColorInput.value || "#1c5bff";
+    }
+    studentDraft = cls.students.map((stu)=>({
+      id: stu.id || window.EPSMatrix.genId("stu"),
+      name: stu.name || ""
+    }));
+    renderEditStudents();
+    editClassModal.classList.remove("hidden");
+    editClassModal.setAttribute("aria-hidden","false");
+    editClassNameInput?.focus();
+  }
+
+  function closeEditClassModal(){
+    if(!editClassModal) return;
+    editClassModal.classList.add("hidden");
+    editClassModal.setAttribute("aria-hidden","true");
+    studentDraft = [];
+    if(editStudentsList){
+      editStudentsList.innerHTML = "";
+    }
+  }
+
+  function ensureStudentDraft(){
+    if(!Array.isArray(studentDraft)){
+      studentDraft = [];
+    }
+    if(!studentDraft.length){
+      studentDraft.push({id: window.EPSMatrix.genId("stu"), name:""});
+    }
+  }
+
+  function renderEditStudents(){
+    if(!editStudentsList) return;
+    ensureStudentDraft();
+    editStudentsList.innerHTML = studentDraft.map((stu, index)=>`
+      <div class="editStudentRow">
+        <span class="editStudentIndex">${index + 1}</span>
+        <input type="text" value="${escapeHtml(stu.name || "")}" data-index="${index}" placeholder="Prénom Nom" />
+        <button class="iconButton" type="button" data-action="remove-student" data-index="${index}" aria-label="Supprimer l'élève">×</button>
+      </div>
+    `).join("");
+  }
+
+  function addStudentRow(){
+    studentDraft.push({id: window.EPSMatrix.genId("stu"), name:""});
+    renderEditStudents();
+    requestAnimationFrame(()=>{
+      const targetInput = editStudentsList?.querySelector(`input[data-index="${studentDraft.length - 1}"]`);
+      targetInput?.focus();
+    });
+  }
+
+  function handleStudentDraftInput(event){
+    const target = event.target;
+    if(!target || target.tagName !== "INPUT") return;
+    const index = Number(target.dataset.index);
+    if(Number.isNaN(index) || !studentDraft[index]) return;
+    studentDraft[index].name = target.value;
+  }
+
+  function handleStudentDraftClick(event){
+    const actionEl = event.target.dataset?.action ? event.target : event.target.closest("[data-action]");
+    if(!actionEl) return;
+    if(actionEl.dataset.action === "remove-student"){
+      const index = Number(actionEl.dataset.index);
+      if(Number.isNaN(index)) return;
+      studentDraft.splice(index, 1);
+      renderEditStudents();
+    }
+  }
+
+  function handleEditClassSubmit(event){
+    event.preventDefault();
+    if(!editClassModal) return;
+    const nextName = (editClassNameInput?.value || "").trim();
+    if(!nextName){
+      alert("Nom obligatoire.");
+      editClassNameInput?.focus();
+      return;
+    }
+    const cleanedStudents = studentDraft
+      .map((stu)=>({id: stu.id || window.EPSMatrix.genId("stu"), name: (stu.name || "").trim()}))
+      .filter((stu)=>stu.name);
+    if(!cleanedStudents.length){
+      alert("Ajoute au moins un élève.");
+      return;
+    }
+    cls.name = nextName;
+    cls.teacher = (editClassTeacherInput?.value || "").trim();
+    cls.site = (editClassSiteInput?.value || "").trim();
+    cls.color = (editClassColorInput?.value || cls.color || "#1c5bff");
+    cls.students = cleanedStudents;
+    window.EPSMatrix.saveState(state);
+    if(cls.color){
+      document.body.style.setProperty("--accent", cls.color);
+    }
+    updateClassHeader();
+    render();
+    closeEditClassModal();
+  }
+
+  function escapeHtml(value=""){
+    return String(value).replace(/[&<>"']/g, (char)=>{
+      switch(char){
+        case "&": return "&amp;";
+        case "<": return "&lt;";
+        case ">": return "&gt;";
+        case '"': return "&quot;";
+        case "'": return "&#39;";
+        default: return char;
+      }
+    });
+  }
 
   function openEvalModal(fieldId){
     const field = window.EPSMatrix.LEARNING_FIELDS.find((lf)=>lf.id === fieldId);

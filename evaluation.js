@@ -298,7 +298,12 @@
     updateNoteToggle();
     renderTerrainSection();
     renderRopePanel();
-    renderRotationPanel();
+    if(isTerrainPanelVisible()){
+      renderRotationPanel();
+    }else{
+      rotationPanel?.classList.add("hidden");
+      hideRotationReadyPopup();
+    }
     renderResultsTable();
   }
 
@@ -556,6 +561,7 @@
     if(!groupKey) return null;
     let team = getRopeTeamByGroupKey(groupKey);
     if(team){
+      commitRopeTeam(team);
       return team;
     }
     const list = getRopeTeams();
@@ -571,6 +577,24 @@
     list.push(team);
     evaluation.data.ropeMode.teams = list;
     return team;
+  }
+
+  function commitRopeTeam(team){
+    if(!team) return;
+    if(!evaluation.data.ropeMode){
+      evaluation.data.ropeMode = createDefaultRopeMode();
+    }
+    let list = evaluation.data.ropeMode.teams;
+    if(!Array.isArray(list)){
+      list = [];
+    }
+    const index = list.findIndex((entry)=>entry.id === team.id);
+    if(index === -1){
+      list.push(team);
+    }else{
+      list[index] = team;
+    }
+    evaluation.data.ropeMode.teams = list;
   }
 
   function computeLevel(type, value){
@@ -1546,11 +1570,28 @@
   }
 
   function normalizeScale(scale, entry){
+    const legacyMap = {
+      ONE_TO_FIVE:"ONE_TO_FOUR",
+      "1..5":"ONE_TO_FOUR",
+      ONE_TO_5:"ONE_TO_FOUR"
+    };
+    if(typeof scale === "string"){
+      const mapped = legacyMap[scale] || scale;
+      if(mapped === "COMMENT"){
+        return {type:"text", preset:"COMMENT"};
+      }
+      if(ROPE_SCALE_PRESETS[mapped]){
+        return createScaleFromPreset(mapped);
+      }
+      return createScaleFromPreset(ROPE_DEFAULT_SCALE);
+    }
     if(scale && typeof scale === "object"){
       if(scale.type === "text" || scale.preset === "COMMENT"){
         return {type:"text", preset:"COMMENT"};
       }
-      const preset = scale.preset && ROPE_SCALE_PRESETS[scale.preset] ? scale.preset : null;
+      const requestedPreset = typeof scale.preset === "string" ? scale.preset : "";
+      const mappedPreset = legacyMap[requestedPreset] || requestedPreset;
+      const preset = mappedPreset && ROPE_SCALE_PRESETS[mappedPreset] ? mappedPreset : null;
       const options = Array.isArray(scale.options) && scale.options.length
         ? scale.options.map((opt)=>({
             value: typeof opt?.value === "string" && opt.value ? opt.value : (typeof opt?.label === "string" ? opt.label : ""),
@@ -1578,6 +1619,7 @@
     if(entry && typeof entry === "object" && typeof entry.rawOptions === "string"){
       return createScaleFromPreset("CUSTOM", entry.rawOptions);
     }
+    // Fallback robuste
     return createScaleFromPreset(ROPE_DEFAULT_SCALE);
   }
 
@@ -1935,8 +1977,8 @@
   }
 
   function setupModesBar(){
-    if(!modeButtons.length) return;
     closeModePanels();
+    if(!modeButtons.length) return;
     modeButtons.forEach((btn)=>{
       btn.addEventListener("click", ()=>{
         const key = btn.dataset.modeBtn;
@@ -1967,12 +2009,14 @@
     }else if(modeKey === "rope"){
       renderRopePanel();
     }
+    renderRotationPanel();
     renderTable();
   }
 
   function closeModePanels(){
     modeButtons.forEach((btn)=>btn.classList.remove("active"));
     Object.values(modePanels).forEach((panel)=>panel?.classList.add("hidden"));
+    renderRotationPanel();
     renderTable();
   }
 
@@ -2500,6 +2544,7 @@ function assignGroupsRoundRobin(count){
     }
     const team = ensureRopeTeamForGroup(groupKey);
     team.memberIds = members.map((stu)=>stu.id);
+    commitRopeTeam(team);
     activeRopeEvaluation = {
       groupKey,
       safetyDelta: 0,
@@ -2680,6 +2725,7 @@ function assignGroupsRoundRobin(count){
     if(!team) return;
     activeRopeEvaluation.safetyDelta = (activeRopeEvaluation.safetyDelta || 0) + 1;
     team.safetyFaults = Number(team.safetyFaults || 0) + 1;
+    commitRopeTeam(team);
     if(btnRopeSafetyFault){
       btnRopeSafetyFault.disabled = true;
       btnRopeSafetyFault.textContent = "Défaut ajouté";
@@ -2754,6 +2800,7 @@ function assignGroupsRoundRobin(count){
       scores,
       safetyFaultDelta: activeRopeEvaluation.safetyDelta || 0
     });
+    commitRopeTeam(team);
     persist();
     renderTable();
     closeRopeEvaluationModal();
@@ -2910,8 +2957,21 @@ function assignGroupsRoundRobin(count){
     return `<li><span class="muted">${groupLabel}</span> • <strong>${winner}</strong> bat ${loser}${score}${refLabel}${abandon}<span class="muted"> (${timeLabel})</span></li>`;
   }
 
+  function isTerrainPanelVisible(){
+    const panel = modePanels?.terrain;
+    const enabled = Boolean(evaluation.data.terrainMode?.enabled);
+    const terrainBtn = modeButtons.find((btn)=>btn.dataset.modeBtn === "terrain");
+    const tabActive = Boolean(terrainBtn && terrainBtn.classList.contains("active"));
+    return Boolean(enabled && tabActive && panel && !panel.classList.contains("hidden"));
+  }
+
   function renderRotationPanel(){
     if(!rotationPanel || !rotationMatchesEl){
+      return;
+    }
+    if(!isTerrainPanelVisible()){
+      rotationPanel.classList.add("hidden");
+      hideRotationReadyPopup();
       return;
     }
     const mode = evaluation.data.terrainMode;
@@ -3129,11 +3189,12 @@ function assignGroupsRoundRobin(count){
   }
 
   function handleTerrainGridClick(event){
-    const action = event.target.dataset.action || event.target.closest("[data-action]")?.dataset.action;
-    if(!action) return;
-    const target = event.target.closest("[data-action]");
+    const origin = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const target = origin?.closest("[data-action]");
+    if(!target) return;
+    const action = target.dataset.action;
     if(action === "focus-score"){
-      const groupIndex = Number(target?.dataset.group || event.target.dataset.group);
+      const groupIndex = Number(target.dataset.group || origin?.dataset.group);
       if(groupIndex){
         focusRotationCard(groupIndex);
       }else{
@@ -3157,11 +3218,17 @@ function assignGroupsRoundRobin(count){
       alert("Aucune rotation en cours.");
       return;
     }
+    rotationPanel?.classList.remove("hidden");
+    rotationPanel?.scrollIntoView({behavior:"smooth", block:"start"});
     const card = rotationMatchesEl.querySelector(`[data-group="${groupIndex}"]`);
     if(card){
       card.scrollIntoView({behavior:"smooth", block:"center"});
       card.classList.add("pulse");
       setTimeout(()=>card.classList.remove("pulse"), 900);
+      requestAnimationFrame(()=>{
+        const focusTarget = card.querySelector('input[data-field="scoreA"]:not([disabled])') || card.querySelector('input[data-field="scoreB"]:not([disabled])');
+        focusTarget?.focus();
+      });
     }else{
       alert("Aucun match prévu pour ce terrain dans la rotation en cours.");
     }
