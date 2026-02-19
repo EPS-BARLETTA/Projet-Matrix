@@ -19,6 +19,24 @@
       </div>
     </header>
     <section class="helpGrid">
+      <article class="helpCard" data-tone="navy">
+        <button type="button" class="helpCardButton" data-target="card-quickstart">👩‍🏫 EPS Matrix en 1 minute</button>
+        <div class="helpContent" id="card-quickstart">
+          <p>🚀 <strong>1) Crée ou ouvre ta classe</strong><br/>Hub → Mes classes → Nouvelle évaluation.</p>
+          <p>📝 <strong>2) Configure ta grille</strong><br/>Bouton « Configurer » : crée uniquement tes critères (les champs de base sont facultatifs).<br/>Bouton « Notation » : attribue les points.</p>
+          <p>👥 <strong>3) Organise tes élèves</strong><br/>Utilise la colonne « Groupe » pour :</p>
+          <ul>
+            <li>🧗 Cordées (escalade)</li>
+            <li>🏓 Terrains (raquettes)</li>
+            <li>🤝 Équipes (sports co)</li>
+            <li>👥 Collectif (même numéro pour toute la classe)</li>
+          </ul>
+          <p>🏓 <strong>4) Mode Raquettes</strong><br/>• Attribue un terrain initial (1,2,3…)<br/>OU<br/>• Lance une répartition automatique<br/>Puis démarre le défi.</p>
+          <p>🎯 <strong>5) Pendant le défi</strong><br/>• Saisis les scores<br/>• Quand tous les matchs sont renseignés → Rotation suivante<br/>⚠️ Une fois lancé, seul le score modifie le classement.</p>
+          <p>✅ <strong>6) Statut élève</strong><br/>Un élève est « Évalué » dès que tous ses critères sont remplis (peu importe le niveau atteint).<br/>Absent / dispensé = neutralisé.</p>
+          <p>💾 <strong>7) Sécurité</strong><br/>Pense à exporter (CSV/PDF) ou sauvegarder avant changement d’appareil.</p>
+        </div>
+      </article>
       <article class="helpCard" data-tone="blue">
         <button type="button" class="helpCardButton" data-target="card-create-class">Créer une classe</button>
         <div class="helpContent" id="card-create-class">
@@ -57,6 +75,27 @@
             <li>Utilise « Initialiser le classement » pour répartir automatiquement les présents.</li>
             <li>ABS/DISP vont automatiquement dans « Hors terrain ».</li>
           </ol>
+        </div>
+      </article>
+      <article class="helpCard" data-tone="green">
+        <button type="button" class="helpCardButton" data-target="card-group-orga">Organiser ses élèves (Groupes pédagogiques)</button>
+        <div class="helpContent" id="card-group-orga">
+          <ul>
+            <li>La colonne « Groupe » te permet d’organiser les élèves selon ta logique pédagogique.</li>
+          </ul>
+          <p class="muted">Exemples :</p>
+          <ul>
+            <li>Escalade : numéro de cordée</li>
+            <li>Raquettes : terrain initial</li>
+            <li>Sport collectif : équipe A / B / C</li>
+            <li>Ateliers : atelier 1 / 2 / 3</li>
+            <li>Travail collectif : même numéro pour toute la classe</li>
+          </ul>
+          <ul>
+            <li>Le groupe ne modifie pas la note.</li>
+            <li>Il sert uniquement à structurer l’organisation.</li>
+            <li>En mode terrain, le groupe correspond automatiquement au terrain actif.</li>
+          </ul>
         </div>
       </article>
       <article class="helpCard" data-tone="teal">
@@ -127,6 +166,16 @@
             <li>Exporter CSV ajoute deux colonnes (<code>absent</code>, <code>dispense</code>) utilisables à l’import.</li>
             <li>En mode terrain, seuls les présents apparaissent dans les matches.</li>
           </ol>
+        </div>
+      </article>
+      <article class="helpCard" data-tone="mint">
+        <button type="button" class="helpCardButton" data-target="card-status">Statut des élèves</button>
+        <div class="helpContent" id="card-status">
+          <ul>
+            <li><strong>Évalué</strong> : tous les critères sont renseignés (le niveau importe peu).</li>
+            <li><strong>En cours</strong> : au moins un critère n’est pas rempli.</li>
+            <li><strong>Absent / Dispensé</strong> : neutralisés dans le suivi, ils n’empêchent pas d’atteindre 100 %.</li>
+          </ul>
         </div>
       </article>
       <article class="helpCard" data-tone="aqua">

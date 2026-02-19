@@ -218,6 +218,14 @@ tbody tr.isAbsent td{background:#e2e8f0;color:#475569;}
 .terrainConfig{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
 .terrainConfig label{font-weight:600;color:var(--muted);display:flex;align-items:center;gap:8px;}
 .terrainConfig input{width:90px;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-family:inherit;}
+.terrainActions{display:flex;flex-wrap:wrap;gap:8px;}
+.terrainActions .btn{flex:1 1 160px;}
+.terrainStatusBlock{border:1px dashed var(--line);border-radius:16px;padding:12px 16px;background:#fff;color:var(--text);font-size:0.95rem;}
+.terrainStep{margin:0 0 4px;}
+.terrainStep.success{color:#065f46;}
+.successText{color:#0f766e;font-weight:600;margin:4px 0;}
+.terrainAlert{margin:0;color:#b91c1c;font-weight:600;}
+.terrainAlert.hidden{display:none;}
 .terrainGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
 .terrainGrid.inset{opacity:.35;pointer-events:none;}
 .terrainCard{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fff;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px rgba(15,23,42,.08);}
@@ -256,6 +264,10 @@ tbody tr.isAbsent td{background:#e2e8f0;color:#475569;}
 .terrainDetailRowActions button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
 .terrainScoreField{display:flex;flex-direction:column;font-weight:600;color:var(--muted);gap:6px;}
 .terrainScoreField input{border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-family:inherit;}
+.rankingList{display:flex;flex-direction:column;gap:12px;}
+.rankingRow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#f8fafc;}
+.rankingRow span{font-weight:600;}
+.rankingRow select{min-width:140px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-family:inherit;background:#fff;}
 .terrainMatches ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;}
 .terrainMatches h4{margin:0;}
 .resultsPanel{border:1px solid var(--line);border-radius:24px;padding:20px;background:#fff;text-align:left;}

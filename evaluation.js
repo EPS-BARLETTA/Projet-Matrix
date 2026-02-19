@@ -21,7 +21,7 @@
   if(!evaluation){ window.location.href = `class.html?class=${classId}`; return; }
   if(evaluation.learningField === "MISC"){ evaluation.learningField = "NOTE"; window.EPSMatrix.saveState(state); }
   if(!Array.isArray(evaluation.data.baseFields)){
-    evaluation.data.baseFields = window.EPSMatrix.DEFAULT_BASE_FIELDS.slice();
+    evaluation.data.baseFields = [];
     window.EPSMatrix.saveState(state);
   }
   if(typeof evaluation.data.showNote !== "boolean"){
@@ -58,10 +58,17 @@
   const terrainPanel = document.getElementById("terrainPanel");
   const terrainToggleBtn = document.getElementById("btnToggleTerrainMode");
   const terrainCountInput = document.getElementById("terrainCountInput");
-  const btnInitTerrains = document.getElementById("btnInitTerrains");
+  const btnConfigureRanking = document.getElementById("btnConfigureRanking");
+  const btnRandomizeRanking = document.getElementById("btnRandomizeRanking");
+  const btnStartChallenge = document.getElementById("btnStartChallenge");
+  const btnResetChallenge = document.getElementById("btnResetChallenge");
   const terrainGrid = document.getElementById("terrainGrid");
   const terrainDisabledHint = document.getElementById("terrainDisabledHint");
-  const terrainMatchesList = document.getElementById("terrainMatchesList");
+  const terrainStatusEl = document.getElementById("terrainStatus");
+  const terrainAlert = document.getElementById("terrainAlert");
+  const rankingModal = document.getElementById("rankingModal");
+  const rankingList = document.getElementById("rankingList");
+  const btnApplyRanking = document.getElementById("btnApplyRanking");
   const ropePanel = document.getElementById("ropePanel");
   const ropeToggleBtn = document.getElementById("btnToggleRopeMode");
   const ropeCompactHint = document.getElementById("ropeCompactHint");
@@ -90,7 +97,7 @@
   const btnSaveRopeEval = document.getElementById("btnSaveRopeEval");
   const ropeSafetyButtonDefaultLabel = btnRopeSafetyFault?.textContent || "Défaut de sécurité (+1)";
   const modeBar = document.getElementById("modeBar");
-  const modeButtons = modeBar ? Array.from(modeBar.querySelectorAll("[data-mode-btn]")) : [];
+  const modeButtons = modeBar ? Array.from(modeBar.querySelectorAll("[data-mode-btn], [data-mode]")) : [];
   const modePanels = {
     terrain: document.getElementById("panelTerrain"),
     rope: document.getElementById("panelRope"),
@@ -179,6 +186,8 @@
   let viewingStudentId = null;
   let rotationPersistTimer = null;
   const matchScoreDrafts = new Map();
+  let rankingDraft = [];
+  let terrainInfoMessage = "";
 
   btnAddRopeObservable?.addEventListener("click", addRopeObservableFromInput);
   ropeObservableInput?.addEventListener("keydown", (event)=>{
@@ -288,7 +297,6 @@
 
   render();
   setupTerrainEvents();
-  setupRopeModeEvents();
   setupModesBar();
 
   function render(){
@@ -297,7 +305,6 @@
     updateStats();
     updateNoteToggle();
     renderTerrainSection();
-    renderRopePanel();
     if(isTerrainPanelVisible()){
       renderRotationPanel();
     }else{
@@ -418,7 +425,8 @@
       const selected = value === studentGroup || (normalizedValue && normalizedValue === normalizedStudentGroup);
       return `<option value="${value}" ${selected?"selected":""}>${label}</option>`;
     }).join("");
-    return `<select class="groupPicker" data-field="groupTag">${options}</select>`;
+    const disabledAttr = isTerrainLocked() ? " disabled" : "";
+    return `<select class="groupPicker" data-field="groupTag"${disabledAttr}>${options}</select>`;
   }
 
   function formatRopeSafetyFaults(studentId){
@@ -640,31 +648,45 @@
   }
 
   function statusHTML(stu){
-    if(stu.absent) return '<span class="status danger">Absent</span>';
-    if(stu.dispense) return '<span class="status warning">Dispensé</span>';
-    return isValidated(stu) ? '<span class="status success">Validé</span>' : '<span class="status warning">En cours</span>';
+    const state = studentStatus(evaluation, stu);
+    if(state === "absent") return '<span class="status danger">Absent</span>';
+    if(state === "dispense") return '<span class="status warning">Dispensé</span>';
+    if(state === "evalue") return '<span class="status success">Évalué</span>';
+    return '<span class="status warning">En cours</span>';
   }
 
-  function isValidated(stu){
-    if(!evaluation.data.criteria.length) return false;
-    return evaluation.data.criteria.every((crit)=>{
-      const info = window.EPSMatrix.CRITERIA_TYPES[crit.type];
-      if(info?.isComment) return Boolean(stu[crit.id]);
-      if(info?.top) return (stu[crit.id]||"") === info.top;
-      return Boolean(stu[crit.id]);
+  function studentStatus(evaluation, stu){
+    if(stu?.absent) return "absent";
+    if(stu?.dispense) return "dispense";
+    return isStudentValidated(evaluation, stu) ? "evalue" : "encours";
+  }
+
+  function isStudentValidated(evaluation, stu){
+    if(!stu) return false;
+    if(stu.absent || stu.dispense) return true;
+    const criteria = evaluation?.data?.criteria || [];
+    if(!criteria.length) return false;
+    return criteria.every((crit)=>{
+      const info = window.EPSMatrix.CRITERIA_TYPES[crit.type] || {};
+      const value = stu?.[crit.id];
+      if(info.isComment){
+        return typeof value === "string" && value.trim().length > 0;
+      }
+      return typeof value === "string" ? value !== "" : value !== null && typeof value !== "undefined";
     });
   }
 
   function updateStats(){
     const tracked = evaluation.data.students.filter((stu)=>!stu.absent);
+    const evaluatedTotal = evaluation.data.students.filter((stu)=>isStudentValidated(evaluation, stu)).length;
     const stats = {
       count: tracked.length,
-      validated: tracked.filter((stu)=>isValidated(stu)).length,
+      evaluated: evaluatedTotal,
       saved: new Date(evaluation.data.savedAt||Date.now()).toLocaleTimeString("fr-FR")
     };
     statsEl.innerHTML = `
       <div class="statCard"><span>Élèves suivis</span><strong>${stats.count}</strong></div>
-      <div class="statCard"><span>Validés</span><strong>${stats.validated}</strong></div>
+      <div class="statCard"><span>Évalués</span><strong>${stats.evaluated}</strong></div>
       <div class="statCard"><span>Dernière sauvegarde</span><strong>${stats.saved}</strong></div>`;
   }
 
@@ -686,6 +708,11 @@
     window.EPSMatrix.saveState(state);
     if(event.target.tagName === "SELECT" && field !== "groupTag"){
       decorateSelect(event.target);
+    }
+    if(field === "groupTag" && isTerrainLocked()){
+      event.target.value = student.groupTag || "";
+      alert("Défi en cours : utilise “Réinitialiser le défi” pour modifier le classement.");
+      return;
     }
     if(field === "groupTag"){
       student.groupTag = window.EPSMatrix.formatGroupTag ? (window.EPSMatrix.formatGroupTag(value) || value) : value;
@@ -851,6 +878,10 @@
     const mode = evaluation.data.terrainMode;
     if(!mode?.enabled){
       alert("Active le mode terrain pour lancer la rotation suivante.");
+      return;
+    }
+    if(!mode.started){
+      alert("Lance le défi pour accéder aux rotations.");
       return;
     }
     const round = getCurrentRoundData();
@@ -1201,9 +1232,16 @@
           viewingStudentId = null;
           if(studentMatchesList) studentMatchesList.innerHTML = "";
           if(studentSummaryStats) studentSummaryStats.innerHTML = "";
+        }else if(modal.id === "rankingModal"){
+          closeRankingModal();
         }
       }
     });
+  });
+  rankingModal?.addEventListener("click", (event)=>{
+    if(event.target === rankingModal){
+      closeRankingModal();
+    }
   });
 
   function openConfigModal(){
@@ -1931,7 +1969,31 @@
         persist();
       });
     }
-    btnInitTerrains?.addEventListener("click", initializeTerrains);
+    btnConfigureRanking?.addEventListener("click", ()=>{
+      if(!evaluation.data.terrainMode?.enabled){
+        alert("Active le mode terrain avant de configurer le classement.");
+        return;
+      }
+      if(isTerrainLocked()){
+        alert("Défi en cours : réinitialise le défi pour modifier le classement.");
+        return;
+      }
+      openRankingModal();
+    });
+    btnRandomizeRanking?.addEventListener("click", ()=>{
+      if(!evaluation.data.terrainMode?.enabled){
+        alert("Active le mode terrain avant d'utiliser la répartition aléatoire.");
+        return;
+      }
+      if(isTerrainLocked()){
+        alert("Défi en cours : réinitialise le défi pour modifier la répartition.");
+        return;
+      }
+      randomizeRanking();
+    });
+    btnStartChallenge?.addEventListener("click", startTerrainChallenge);
+    btnResetChallenge?.addEventListener("click", resetTerrainChallenge);
+    btnApplyRanking?.addEventListener("click", applyRankingDraft);
     terrainGrid?.addEventListener("click", handleTerrainGridClick);
     btnSavePlayer?.addEventListener("click", savePlayerModal);
     btnNextRotation?.addEventListener("click", handleNextRotation);
@@ -1978,25 +2040,28 @@
 
   function setupModesBar(){
     closeModePanels();
-    if(!modeButtons.length) return;
-    modeButtons.forEach((btn)=>{
-      btn.addEventListener("click", ()=>{
-        const key = btn.dataset.modeBtn;
-        if(!key) return;
-        if(btn.classList.contains("active")){
-          closeModePanels();
-          storeModePreference("");
-          return;
-        }
-        openMode(key);
+    if(modeButtons.length){
+      modeButtons.forEach((btn)=>{
+        btn.addEventListener("click", ()=>{
+          const key = btn.dataset.modeBtn || btn.dataset.mode;
+          if(!key) return;
+          if(btn.classList.contains("active")){
+            closeModePanels();
+            storeModePreference("");
+            return;
+          }
+          openMode(key);
+        });
       });
-    });
+    }
+    openMode("terrain", true);
   }
 
   function openMode(modeKey, skipPersist){
     if(!modePanels[modeKey]) return;
     modeButtons.forEach((btn)=>{
-      btn.classList.toggle("active", btn.dataset.modeBtn === modeKey);
+      const btnKey = btn.dataset.modeBtn || btn.dataset.mode;
+      btn.classList.toggle("active", btnKey === modeKey);
     });
     Object.entries(modePanels).forEach(([name, panel])=>{
       panel?.classList.toggle("hidden", name !== modeKey);
@@ -2006,10 +2071,13 @@
     }
     if(modeKey === "terrain"){
       renderTerrainSection();
-    }else if(modeKey === "rope"){
-      renderRopePanel();
     }
-    renderRotationPanel();
+    if(isTerrainPanelVisible()){
+      renderRotationPanel();
+    }else{
+      rotationPanel?.classList.add("hidden");
+      hideRotationReadyPopup();
+    }
     renderTable();
   }
 
@@ -2044,6 +2112,14 @@
       enforceSingleRefEverywhere();
       ensureCurrentRound();
     }else{
+      mode.started = false;
+      mode.locked = false;
+      mode.startOrder = [];
+      mode.currentRound = 1;
+      mode.rounds = [];
+      mode.matches = [];
+      mode.entrantRoundByStudentId = {};
+      delete mode.undoLastRotation;
       matchScoreDrafts.clear();
       hideRotationReadyPopup();
     }
@@ -2085,8 +2161,228 @@ function assignGroupsRoundRobin(count){
     });
 }
 
+  function openRankingModal(){
+    if(!rankingModal) return;
+    rankingDraft = evaluation.data.students
+      .filter((stu)=>!stu.absent && !stu.dispense)
+      .map((stu)=>({
+        id: stu.id,
+        name: stu.name,
+        groupTag: formatGroupValueLabel(stu.groupTag)
+      }))
+      .sort((a, b)=>a.name.localeCompare(b.name, "fr"));
+    renderRankingDraft();
+    rankingModal.classList.remove("hidden");
+    rankingModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeRankingModal(){
+    if(!rankingModal) return;
+    rankingModal.classList.add("hidden");
+    rankingModal.setAttribute("aria-hidden", "true");
+    rankingDraft = [];
+  }
+
+  function renderRankingDraft(){
+    if(!rankingList) return;
+    if(!rankingDraft.length){
+      rankingList.innerHTML = '<p class="muted">Aucun élève disponible pour cette rotation.</p>';
+      return;
+    }
+    const mode = evaluation.data.terrainMode;
+    const terrainSlots = Math.max(mode?.terrainCount || DEFAULT_TERRAIN_COUNT, getMaxGroupIndex());
+    const options = Array.from({length: terrainSlots}, (_v, index)=>String(index + 1));
+    rankingList.innerHTML = rankingDraft.map((entry)=>`<div class="rankingRow" data-id="${entry.id}">
+        <span>${escapeHtml(entry.name)}</span>
+        <select data-ranking="${entry.id}">
+          <option value="">—</option>
+          ${options.map((value)=>`<option value="${value}">Terrain ${value}</option>`).join("")}
+        </select>
+      </div>`).join("");
+    rankingList.querySelectorAll("select[data-ranking]").forEach((select)=>{
+      const entry = rankingDraft.find((item)=>item.id === select.dataset.ranking);
+      if(entry){
+        select.value = entry.groupTag || "";
+      }
+      select.addEventListener("change", ()=>{
+        if(entry){
+          entry.groupTag = select.value || "";
+        }
+      });
+    });
+  }
+
+  function applyRankingDraft(){
+    if(isTerrainLocked()){
+      alert("Défi en cours : réinitialise le défi pour modifier le classement.");
+      return;
+    }
+    rankingDraft.forEach((entry)=>{
+      const student = evaluation.data.students.find((stu)=>stu.id === entry.id);
+      if(!student) return;
+      if(entry.groupTag){
+        setStudentGroup(student, entry.groupTag);
+      }else{
+        student.groupTag = "";
+      }
+    });
+    persist();
+    setTerrainInfoMessage("Classement mis à jour.");
+    closeRankingModal();
+    render();
+  }
+
+  function randomizeRanking(){
+    const mode = evaluation.data.terrainMode;
+    const count = clampTerrainCountInput(terrainCountInput?.value || mode.terrainCount);
+    mode.terrainCount = count;
+    const pool = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense);
+    shuffleStudents(pool);
+    pool.forEach((stu, idx)=>{
+      const target = (idx % count) + 1;
+      setStudentGroup(stu, target);
+      if(stu.role === "ref"){
+        stu.role = "player";
+      }
+    });
+    persist();
+    setTerrainInfoMessage("Répartition aléatoire appliquée.");
+    render();
+  }
+
+  function shuffleStudents(list){
+    for(let i=list.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+  }
+
+  function hasCompleteRanking(){
+    const participants = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense);
+    if(!participants.length) return false;
+    return participants.every((stu)=>Boolean(window.EPSMatrix.parseGroupIndex(stu.groupTag)));
+  }
+
+  function isTerrainLocked(){
+    return Boolean(evaluation.data.terrainMode?.locked);
+  }
+
+  function startTerrainChallenge(){
+    const mode = evaluation.data.terrainMode;
+    if(!mode?.enabled){
+      alert("Active le mode terrain pour lancer le défi.");
+      return;
+    }
+    if(isTerrainLocked()){
+      alert("Défi déjà lancé. Réinitialise si besoin de recommencer.");
+      return;
+    }
+    if(!hasCompleteRanking()){
+      updateTerrainAlertState(true);
+      alert("Attribue un terrain à chaque élève avant de lancer le défi.");
+      return;
+    }
+    mode.started = true;
+    mode.locked = true;
+    mode.startOrder = evaluation.data.students.map((stu)=>({id:stu.id, groupTag: stu.groupTag || ""}));
+    mode.currentRound = 1;
+    mode.rounds = [];
+    mode.matches = [];
+    mode.entrantRoundByStudentId = {};
+    delete mode.undoLastRotation;
+    matchScoreDrafts.clear();
+    ensureCurrentRound();
+    persist();
+    setTerrainInfoMessage("Défi lancé. Rotation #1 disponible.");
+    render();
+  }
+
+  function resetTerrainChallenge(){
+    const mode = evaluation.data.terrainMode;
+    if(!mode?.enabled){
+      alert("Active le mode terrain pour utiliser cette action.");
+      return;
+    }
+    if(!mode.started && !mode.locked){
+      setTerrainInfoMessage("");
+      return;
+    }
+    if(!window.confirm("Réinitialiser le défi raquettes ? Les rotations en cours seront effacées.")){
+      return;
+    }
+    restoreStartOrder(mode);
+    mode.started = false;
+    mode.locked = false;
+    mode.startOrder = [];
+    mode.currentRound = 1;
+    mode.rounds = [];
+    mode.matches = [];
+    mode.entrantRoundByStudentId = {};
+    delete mode.undoLastRotation;
+    matchScoreDrafts.clear();
+    hideRotationReadyPopup();
+    persist();
+    setTerrainInfoMessage("Défi réinitialisé.");
+    render();
+  }
+
+  function restoreStartOrder(mode){
+    if(!Array.isArray(mode?.startOrder) || !mode.startOrder.length) return;
+    const map = new Map(mode.startOrder.map((entry)=>[entry.id, entry.groupTag || ""]));
+    evaluation.data.students.forEach((stu)=>{
+      if(!map.has(stu.id)) return;
+      const tag = map.get(stu.id);
+      if(tag){
+        setStudentGroup(stu, tag);
+      }else{
+        stu.groupTag = "";
+      }
+    });
+  }
+
+  function setTerrainInfoMessage(message){
+    terrainInfoMessage = message || "";
+    updateTerrainStatusBlock();
+  }
+
+  function updateTerrainStatusBlock(){
+    if(!terrainStatusEl){
+      return;
+    }
+    const mode = evaluation.data.terrainMode;
+    if(!mode?.enabled){
+      terrainStatusEl.innerHTML = '<p class="muted">Active le mode terrain pour accéder au défi raquettes.</p>';
+      return;
+    }
+    if(mode.started){
+      const roundLabel = mode.currentRound || 1;
+      const info = terrainInfoMessage ? `<p class="muted">${escapeHtml(terrainInfoMessage)}</p>` : "";
+      terrainStatusEl.innerHTML = `<p class="terrainStep success"><strong>Défi en cours</strong> – Rotation #${roundLabel}</p>
+      <p class="muted">Saisis tous les scores, puis clique “Rotation suivante”.</p>
+      ${info}`;
+      return;
+    }
+    const ready = hasCompleteRanking();
+    const info = terrainInfoMessage ? `<p class="muted">${escapeHtml(terrainInfoMessage)}</p>` : "";
+    const readyText = ready ? '<p class="successText">Tous les élèves ont un terrain. Tu peux lancer le défi.</p>' : "";
+    terrainStatusEl.innerHTML = `
+      <p class="terrainStep"><strong>Étape 1.</strong> Configure le classement ou lance une répartition aléatoire.</p>
+      <p class="terrainStep"><strong>Étape 2.</strong> Clique sur “Lancer le défi” pour verrouiller les terrains.</p>
+      ${readyText}
+      ${info}`;
+  }
+
+  function updateTerrainAlertState(show){
+    if(!terrainAlert) return;
+    terrainAlert.classList.toggle("hidden", !show);
+  }
+
   function ensureCurrentRound(){
     const mode = evaluation.data.terrainMode;
+    if(!mode?.started){
+      mode.currentRound = 1;
+      return;
+    }
     const roundNumber = mode.currentRound || 1;
     mode.currentRound = roundNumber;
     let round = Array.isArray(mode.rounds) ? mode.rounds.find((entry)=>entry.round === roundNumber) : null;
@@ -2231,14 +2527,27 @@ function assignGroupsRoundRobin(count){
     if(!terrainPanel || !terrainGrid) return;
     const mode = evaluation.data.terrainMode;
     updateTerrainToggleButton();
+    const locked = isTerrainLocked();
+    const canEditRanking = mode.enabled && !locked;
+    const completeRanking = hasCompleteRanking();
     if(terrainCountInput){
       terrainCountInput.value = mode.terrainCount;
-      terrainCountInput.disabled = !mode.enabled;
+      terrainCountInput.disabled = !mode.enabled || locked;
     }
-    if(btnInitTerrains){
-      btnInitTerrains.disabled = !mode.enabled;
-      btnInitTerrains.classList.toggle("disabled", !mode.enabled);
+    if(btnConfigureRanking){
+      btnConfigureRanking.disabled = !canEditRanking;
     }
+    if(btnRandomizeRanking){
+      btnRandomizeRanking.disabled = !canEditRanking;
+    }
+    if(btnStartChallenge){
+      btnStartChallenge.disabled = !mode.enabled || locked || !completeRanking;
+    }
+    if(btnResetChallenge){
+      btnResetChallenge.disabled = !mode.enabled || !mode.started;
+    }
+    updateTerrainStatusBlock();
+    updateTerrainAlertState(mode.enabled && !locked && !completeRanking);
     if(!mode.enabled){
       terrainGrid.innerHTML = "";
       terrainDisabledHint?.classList.remove("hidden");
@@ -2895,13 +3204,15 @@ function assignGroupsRoundRobin(count){
     }).join("") : `<p class="muted smallText">Aucun joueur affecté.</p>`;
     const refBlock = ref ? `<p class="terrainLabel">Arbitre : <strong>${escapeHtml(ref.name)}</strong></p>` : `<p class="terrainLabel">Aucun arbitre</p>`;
     const terrainHeading = group.label ? `Terrain ${group.label}` : "Terrain —";
+    const started = Boolean(evaluation.data.terrainMode?.started);
+    const scoreBtnDisabled = started ? "" : "disabled";
     return `<article class="terrainCard" data-group="${group.index}">
       <header>
         <div>
           <h3>${terrainHeading}</h3>
           <p class="terrainLabel">Joueurs : ${group.students.length}</p>
         </div>
-        <button class="btn secondary" type="button" data-action="focus-score" data-group="${group.index}">Saisir score</button>
+        <button class="btn secondary" type="button" data-action="focus-score" data-group="${group.index}" ${scoreBtnDisabled}>Saisir score</button>
       </header>
       ${refBlock}
       <ul class="terrainStudentList">${studentList}</ul>
@@ -2931,17 +3242,7 @@ function assignGroupsRoundRobin(count){
   }
 
   function renderMatchesList(matches){
-    if(!terrainMatchesList) return;
-    if(!evaluation.data.terrainMode.enabled){
-      terrainMatchesList.innerHTML = '<li class="muted">Active le mode terrain pour suivre les matches.</li>';
-      return;
-    }
-    const recent = (matches||[]).slice(0,10);
-    if(!recent.length){
-      terrainMatchesList.innerHTML = '<li class="muted">Aucun match enregistré.</li>';
-      return;
-    }
-    terrainMatchesList.innerHTML = recent.map((match)=>formatMatchEntry(match)).join("");
+    return;
   }
 
   function formatMatchEntry(match){
@@ -2960,7 +3261,10 @@ function assignGroupsRoundRobin(count){
   function isTerrainPanelVisible(){
     const panel = modePanels?.terrain;
     const enabled = Boolean(evaluation.data.terrainMode?.enabled);
-    const terrainBtn = modeButtons.find((btn)=>btn.dataset.modeBtn === "terrain");
+    const terrainBtn = modeButtons.find((btn)=>{
+      const key = btn.dataset.modeBtn || btn.dataset.mode;
+      return key === "terrain";
+    });
     const tabActive = Boolean(terrainBtn && terrainBtn.classList.contains("active"));
     return Boolean(enabled && tabActive && panel && !panel.classList.contains("hidden"));
   }
@@ -2975,7 +3279,7 @@ function assignGroupsRoundRobin(count){
       return;
     }
     const mode = evaluation.data.terrainMode;
-    if(!mode?.enabled){
+    if(!mode?.enabled || !mode.started){
       rotationPanel.classList.add("hidden");
       if(rotationRoundLabel){
         rotationRoundLabel.textContent = "";
@@ -3211,6 +3515,10 @@ function assignGroupsRoundRobin(count){
   function focusRotationCard(groupIndex){
     if(!evaluation.data.terrainMode?.enabled){
       alert("Active le mode terrain pour saisir les scores.");
+      return;
+    }
+    if(!evaluation.data.terrainMode?.started){
+      alert("Lance le défi pour accéder à la saisie des scores.");
       return;
     }
     ensureCurrentRound();

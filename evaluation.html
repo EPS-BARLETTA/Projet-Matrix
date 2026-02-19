@@ -35,9 +35,6 @@
     <section class="modeSection">
       <div class="modeBar" id="modeBar">
         <button class="modeChip" type="button" data-mode-btn="terrain">Raquettes</button>
-        <button class="modeChip" type="button" data-mode-btn="rope">Cordée</button>
-        <button class="modeChip" type="button" data-mode-btn="team">Sport co</button>
-        <button class="modeChip" type="button" data-mode-btn="collective">Collectif</button>
       </div>
       <div class="modePanel hidden" id="panelTerrain">
         <section class="terrainPanel" id="terrainPanel">
@@ -50,98 +47,21 @@
               <label>Nombre de terrains
                 <input type="number" id="terrainCountInput" min="1" max="20" value="4" />
               </label>
-              <button class="btn secondary" type="button" id="btnInitTerrains">Initialiser le classement</button>
+              <div class="terrainActions">
+                <button class="btn secondary" type="button" id="btnConfigureRanking">Configurer le classement</button>
+                <button class="btn secondary" type="button" id="btnRandomizeRanking">Répartition aléatoire</button>
+                <button class="btn primary" type="button" id="btnStartChallenge">Lancer le défi</button>
+                <button class="btn secondary danger" type="button" id="btnResetChallenge">Réinitialiser le défi</button>
+              </div>
             </div>
+            <div class="terrainStatusBlock" id="terrainStatus"></div>
+            <p class="terrainAlert hidden" id="terrainAlert">Attribue un terrain à chaque élève ou utilise “Répartition aléatoire”.</p>
           </div>
           <div class="terrainContent" id="terrainContent">
             <p class="muted smallText" id="terrainDisabledHint">Active le mode terrain pour générer automatiquement les cartes à partir des groupes.</p>
             <div class="terrainGrid" id="terrainGrid"></div>
-            <div class="terrainMatches">
-              <h4>Matches récents</h4>
-              <ul id="terrainMatchesList"></ul>
-            </div>
           </div>
         </section>
-      </div>
-      <div class="modePanel hidden" id="panelRope">
-        <section class="ropePanel" id="ropePanel">
-          <div class="sectionHeader ropeHeader">
-            <div>
-              <h3>Mode cordée</h3>
-              <p class="muted smallText">Escalade – rôles et observables</p>
-            </div>
-            <button class="btn secondary" type="button" id="btnToggleRopeMode">Activer le mode cordée</button>
-          </div>
-          <div class="ropeCompact" id="ropeCompactHint">
-            <p class="muted smallText">Active uniquement quand nécessaire, configure tes observables puis choisis une cordée à évaluer.</p>
-          </div>
-          <div class="ropeContent hidden" id="ropeContent">
-            <div class="ropeSettingsRow">
-              <label class="ropeSelectLabel">
-                Taille de cordée
-                <select id="ropeSizeSelect">
-                  <option value="2">Cordée de 2</option>
-                  <option value="3">Cordée de 3</option>
-                </select>
-              </label>
-              <div class="ropeEvalRow">
-                <label class="ropeSelectLabel">
-                  Cordée à évaluer
-                  <select id="ropeTeamSelect">
-                    <option value="">Sélectionner une cordée</option>
-                  </select>
-                </label>
-                <button class="btn secondary" type="button" id="btnManageRopeTeams">Gérer les cordées</button>
-              </div>
-            </div>
-            <p class="muted smallText hidden" id="ropeTeamEmptyHint">Affecte tes élèves à un groupe (T1, T2...) pour lancer une cordée.</p>
-            <div class="ropeConfigToggle">
-              <button class="btn secondary" type="button" id="btnToggleRopeConfig">Configurer les observables</button>
-            </div>
-            <div class="ropeRoles hidden" id="ropeConfigPanel">
-              <article class="ropeRoleCard" data-role-card="climber">
-                <div>
-                  <h4>Grimpeur</h4>
-                  <p class="muted smallText"><span data-role-count="climber">0 observable</span></p>
-                </div>
-                <button class="btn secondary" type="button" data-role-config="climber">Configurer</button>
-              </article>
-              <article class="ropeRoleCard" data-role-card="belayerTopRope">
-                <div>
-                  <h4>Assureur moulinette</h4>
-                  <p class="muted smallText"><span data-role-count="belayerTopRope">0 observable</span></p>
-                </div>
-                <button class="btn secondary" type="button" data-role-config="belayerTopRope">Configurer</button>
-              </article>
-              <article class="ropeRoleCard" data-role-card="belayerLead">
-                <div>
-                  <h4>Assureur tête</h4>
-                  <p class="muted smallText"><span data-role-count="belayerLead">0 observable</span></p>
-                </div>
-                <button class="btn secondary" type="button" data-role-config="belayerLead">Configurer</button>
-              </article>
-              <article class="ropeRoleCard" data-role-card="backUpBelayer">
-                <div>
-                  <h4>Contre-assureur</h4>
-                  <p class="muted smallText"><span data-role-count="backUpBelayer">0 observable</span></p>
-                </div>
-                <button class="btn secondary" type="button" data-role-config="backUpBelayer">Configurer</button>
-              </article>
-            </div>
-          </div>
-        </section>
-      </div>
-      <div class="modePanel hidden" id="panelTeam">
-        <div class="modePlaceholderCard">
-          <span class="placeholderIcon" role="img" aria-label="Bientôt">🛠️</span>
-          <p>Phase 2 : configuration Sport co.</p>
-        </div>
-      </div>
-      <div class="modePanel hidden" id="panelCollective">
-        <div class="modePlaceholderCard">
-          <span class="placeholderIcon" role="img" aria-label="Bientôt">🛠️</span>
-          <p>Phase 2 : configuration Collectif.</p>
-        </div>
       </div>
     </section>
     <section class="rotationPanel hidden" id="rotationPanel">
@@ -208,11 +128,7 @@
         <button class="iconButton" data-close-modal>&times;</button>
       </div>
       <div class="modalScrollable">
-        <p class="muted">Sélectionne les champs de base à afficher puis compose tes critères.</p>
-        <section class="baseFieldsPanel">
-          <h3>Champs de base</h3>
-          <div id="baseFieldOptions" class="baseFieldGrid"></div>
-        </section>
+        <p class="muted">Compose tes critères d'observation : ce sont eux qui structurent la grille.</p>
         <section>
           <h3>Critères</h3>
           <div id="configList" class="criteriaList"></div>
@@ -285,6 +201,24 @@
         <span class="flex-fill"></span>
         <button class="btn secondary" type="button" data-close-modal>Fermer</button>
         <button class="btn primary" type="button" id="btnSavePlayer">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="rankingModal" role="dialog" aria-modal="true">
+    <div class="modalCard large">
+      <div class="modalHeader">
+        <h2>Configurer le classement</h2>
+        <button class="iconButton" data-close-modal>&times;</button>
+      </div>
+      <div class="modalScrollable">
+        <p class="muted">Assigne un terrain à chaque élève (G1 = Terrain 1) ou utilise la répartition aléatoire.</p>
+        <div id="rankingList" class="rankingList"></div>
+      </div>
+      <div class="actions modalActions">
+        <span class="flex-fill"></span>
+        <button class="btn secondary" type="button" data-close-modal>Annuler</button>
+        <button class="btn primary" type="button" id="btnApplyRanking">Appliquer</button>
       </div>
     </div>
   </div>

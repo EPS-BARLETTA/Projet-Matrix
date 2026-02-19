@@ -558,7 +558,10 @@ function createDefaultTerrainMode(){
     matches:[],
     currentRound:1,
     rounds:[],
-    entrantRoundByStudentId:{}
+    entrantRoundByStudentId:{},
+    started:false,
+    locked:false,
+    startOrder:[]
   };
 }
 
@@ -606,6 +609,10 @@ function normalizeTerrainMode(rawMode, students){
   mode.rounds = Array.isArray(mode.rounds) ? mode.rounds.map(normalizeRound).filter(Boolean) : [];
   stripMatchLocks(mode.rounds);
   mode.entrantRoundByStudentId = (mode.entrantRoundByStudentId && typeof mode.entrantRoundByStudentId === "object") ? mode.entrantRoundByStudentId : {};
+  const hadRounds = Array.isArray(mode.rounds) && mode.rounds.length > 0;
+  mode.started = typeof mode.started === "boolean" ? mode.started : hadRounds;
+  mode.locked = typeof mode.locked === "boolean" ? mode.locked : mode.started;
+  mode.startOrder = Array.isArray(mode.startOrder) ? mode.startOrder : [];
   if(Array.isArray(students)){
     students.forEach(ensureTerrainStudentFields);
   }
