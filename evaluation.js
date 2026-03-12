@@ -2765,10 +2765,6 @@ function assignGroupsRoundRobin(count){
       alert("Défi déjà lancé. Réinitialise si besoin de recommencer.");
       return;
     }
-    if(mode.finished){
-      alert("Réinitialise le défi pour lancer une nouvelle partie.");
-      return;
-    }
     if(isDoubleModeActive() && !getDoubleTeams().length){
       alert("Crée au moins un binôme pour lancer le défi double.");
       return;
@@ -2889,7 +2885,7 @@ function assignGroupsRoundRobin(count){
     if(isTerrainChallengeFinished()){
       const info = terrainInfoMessage ? `<p class="muted">${escapeHtml(terrainInfoMessage)}</p>` : "";
       terrainStatusEl.innerHTML = `<p class="terrainStep success"><strong>Partie terminée</strong></p>
-      <p class="muted">Le tournoi est terminé. Consulte le classement final ci-dessous ou réinitialise le défi pour recommencer.</p>
+      <p class="muted">Le tournoi est terminé. Clique sur “Relancer le tournoi” pour repartir avec ce classement, ou “Réinitialiser le défi” pour tout recommencer.</p>
       ${info}`;
       return;
     }
@@ -3135,7 +3131,9 @@ function assignGroupsRoundRobin(count){
       btnRandomizeRanking.disabled = !canEditRanking;
     }
     if(btnStartChallenge){
-      btnStartChallenge.disabled = !mode.enabled || locked || !completeRanking || finished;
+      const startDisabled = !mode.enabled || locked || !completeRanking;
+      btnStartChallenge.disabled = startDisabled;
+      btnStartChallenge.textContent = finished ? "Relancer le tournoi" : "Lancer le défi";
     }
     if(btnResetChallenge){
       btnResetChallenge.disabled = !mode.enabled || (!mode.started && !finished);
