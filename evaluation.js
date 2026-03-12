@@ -33,6 +33,9 @@
   evaluation.data.ropeMode = normalizeRopeMode(evaluation.data.ropeMode);
   const hadTerrainMode = Boolean(evaluation.data.terrainMode);
   evaluation.data.terrainMode = window.EPSMatrix.normalizeTerrainMode(evaluation.data.terrainMode, evaluation.data.students);
+  if(typeof evaluation.data.terrainMode.finished !== "boolean"){
+    evaluation.data.terrainMode.finished = false;
+  }
   ensureCurrentRound();
   if(!hadTerrainMode){
     window.EPSMatrix.saveState(state);
@@ -58,10 +61,21 @@
   const terrainPanel = document.getElementById("terrainPanel");
   const terrainToggleBtn = document.getElementById("btnToggleTerrainMode");
   const terrainCountInput = document.getElementById("terrainCountInput");
+  const terrainModeSelector = document.getElementById("terrainModeSelector");
+  const terrainModeInputs = terrainModeSelector ? Array.from(terrainModeSelector.querySelectorAll("input[name='terrainModeType']")) : [];
   const btnConfigureRanking = document.getElementById("btnConfigureRanking");
   const btnRandomizeRanking = document.getElementById("btnRandomizeRanking");
   const btnStartChallenge = document.getElementById("btnStartChallenge");
   const btnResetChallenge = document.getElementById("btnResetChallenge");
+  const doubleModeTools = document.getElementById("doubleModeTools");
+  const btnRandomizeTeams = document.getElementById("btnRandomizeTeams");
+  const btnClearTeams = document.getElementById("btnClearTeams");
+  const btnAddManualTeam = document.getElementById("btnAddManualTeam");
+  const doubleSelectA = document.getElementById("doubleSelectA");
+  const doubleSelectB = document.getElementById("doubleSelectB");
+  const doubleTeamsPreview = document.getElementById("doubleTeamsPreview");
+  const doubleModeAlert = document.getElementById("doubleModeAlert");
+  const doubleManualHint = document.getElementById("doubleManualHint");
   const terrainGrid = document.getElementById("terrainGrid");
   const terrainDisabledHint = document.getElementById("terrainDisabledHint");
   const terrainStatusEl = document.getElementById("terrainStatus");
@@ -160,6 +174,10 @@
   let ropeEvalTeam = null;
   const resultsPanel = document.getElementById("resultsPanel");
   const resultsBody = document.getElementById("resultsBody");
+  const resultsNameHeader = document.getElementById("resultsNameHeader");
+  const resultsStartHeader = document.getElementById("resultsStartHeader");
+  const resultsCurrentHeader = document.getElementById("resultsCurrentHeader");
+  const resultsTitle = resultsPanel ? resultsPanel.querySelector("h3") : null;
   const btnExportResultsCsv = document.getElementById("btnExportResultsCsv");
   const playerModal = document.getElementById("playerModal");
   const playerModalTitle = document.getElementById("playerModalTitle");
@@ -177,6 +195,17 @@
   const rotationReadyDesc = document.getElementById("rotationReadyDesc");
   const btnReadyNext = document.getElementById("btnReadyNext");
   const btnReadyReview = document.getElementById("btnReadyReview");
+  const rotationActions = rotationPanel ? rotationPanel.querySelector(".rotationActions") : null;
+  let btnFinishTournament = document.getElementById("btnFinishTournament");
+  if(!btnFinishTournament && rotationActions){
+    btnFinishTournament = document.createElement("button");
+    btnFinishTournament.type = "button";
+    btnFinishTournament.id = "btnFinishTournament";
+    btnFinishTournament.className = "btn secondary";
+    btnFinishTournament.textContent = "Fin du tournoi";
+    btnFinishTournament.classList.add("hidden");
+    rotationActions.insertBefore(btnFinishTournament, btnNextRotation || null);
+  }
   const studentSummaryModal = document.getElementById("studentSummaryModal");
   const studentSummaryTitle = document.getElementById("studentSummaryTitle");
   const studentSummaryMeta = document.getElementById("studentSummaryMeta");
@@ -884,6 +913,10 @@
       alert("Lance le défi pour accéder aux rotations.");
       return;
     }
+    if(isTerrainChallengeFinished()){
+      alert("La partie est terminée. Réinitialise le défi pour recommencer.");
+      return;
+    }
     const round = getCurrentRoundData();
     if(!round || !Array.isArray(round.matches) || !round.matches.length){
       alert("Aucune rotation en cours.");
@@ -909,7 +942,7 @@
     const nextRoundNumber = round.round + 1;
     evaluation.data.terrainMode.currentRound = nextRoundNumber;
     cleanupOldEntrants(nextRoundNumber);
-    const nextRound = buildRound(nextRoundNumber);
+    const nextRound = isDoubleModeActive() ? buildDoubleRound(nextRoundNumber) : buildRound(nextRoundNumber);
     if(nextRound){
       upsertRound(nextRound);
     }
@@ -924,6 +957,7 @@
       savedAt: new Date().toISOString(),
       round: round?.round || mode.currentRound || 1,
       students: evaluation.data.students.map((stu)=>({id:stu.id, groupTag:stu.groupTag, role:stu.role})),
+      teams: JSON.parse(JSON.stringify(mode.teams || [])),
       entrantRoundByStudentId: JSON.parse(JSON.stringify(mode.entrantRoundByStudentId || {})),
       rounds: JSON.parse(JSON.stringify(mode.rounds || [])),
       matchesLog: JSON.parse(JSON.stringify(mode.matches || []))
@@ -947,6 +981,10 @@
       stu.role = saved.role || "player";
       window.EPSMatrix.ensureTerrainStudentFields(stu);
     });
+    if(Array.isArray(snapshot.teams)){
+      mode.teams = window.EPSMatrix.normalizeTerrainTeams(snapshot.teams, evaluation.data.students);
+      syncStudentsWithTeams();
+    }
     mode.currentRound = snapshot.round || 1;
     mode.entrantRoundByStudentId = snapshot.entrantRoundByStudentId || {};
     mode.rounds = snapshot.rounds || [];
@@ -958,6 +996,9 @@
   }
 
   function applyRoundResults(round){
+    if(isDoubleModeActive()){
+      return applyDoubleRoundResults(round);
+    }
     const mode = evaluation.data.terrainMode;
     if(!mode) return false;
     const entrantMap = mode.entrantRoundByStudentId && typeof mode.entrantRoundByStudentId === "object" ? mode.entrantRoundByStudentId : {};
@@ -997,6 +1038,53 @@
         winnerId: winner.id,
         loserId: loser.id,
         refId: ref?.id || null,
+        scoreText: match.scoreText || "",
+        forfeitId: match.forfeitId || null
+      });
+      appliedCount += 1;
+    });
+    if(!appliedCount) return false;
+    mode.matches = history.slice(0, 200);
+    mode.entrantRoundByStudentId = entrantMap;
+    return true;
+  }
+
+  function applyDoubleRoundResults(round){
+    const mode = evaluation.data.terrainMode;
+    if(!mode) return false;
+    const entrantMap = mode.entrantRoundByStudentId && typeof mode.entrantRoundByStudentId === "object" ? mode.entrantRoundByStudentId : {};
+    mode.entrantRoundByStudentId = entrantMap;
+    const history = Array.isArray(mode.matches) ? mode.matches.slice() : [];
+    const nextRoundNumber = round.round + 1;
+    let appliedCount = 0;
+    (round.matches || []).forEach((match)=>{
+      if(match.status !== "done" || !match.winnerId || !match.loserId) return;
+      const winnerTeam = getTeamById(match.winnerId);
+      const loserTeam = getTeamById(match.loserId);
+      if(!winnerTeam || !loserTeam) return;
+      const prevWinnerGroup = window.EPSMatrix.parseGroupIndex(winnerTeam.groupTag);
+      const prevLoserGroup = window.EPSMatrix.parseGroupIndex(loserTeam.groupTag);
+      applyDoubleMatchResult({
+        groupIndex: match.groupIndex,
+        winnerTeam,
+        loserTeam,
+        scoreText: match.scoreText || "",
+        forfeitId: match.forfeitId || null
+      });
+      const nextWinnerGroup = window.EPSMatrix.parseGroupIndex(winnerTeam.groupTag);
+      const nextLoserGroup = window.EPSMatrix.parseGroupIndex(loserTeam.groupTag);
+      if(prevWinnerGroup !== nextWinnerGroup && nextWinnerGroup){
+        entrantMap[winnerTeam.id] = nextRoundNumber;
+      }
+      if(prevLoserGroup !== nextLoserGroup && nextLoserGroup){
+        entrantMap[loserTeam.id] = nextRoundNumber;
+      }
+      history.unshift({
+        at: new Date().toISOString(),
+        groupIndex: match.groupIndex || prevWinnerGroup || prevLoserGroup || 1,
+        round: round.round,
+        winnerTeamId: winnerTeam.id,
+        loserTeamId: loserTeam.id,
         scoreText: match.scoreText || "",
         forfeitId: match.forfeitId || null
       });
@@ -1955,6 +2043,8 @@
 
   function setupTerrainEvents(){
     if(!terrainPanel) return;
+    setupTerrainModeSelector();
+    setupDoubleModeActions();
     if(terrainToggleBtn){
       updateTerrainToggleButton();
       terrainToggleBtn.addEventListener("click", ()=>{
@@ -2009,6 +2099,237 @@
         resultsPanel.scrollIntoView({behavior:"smooth", block:"center"});
       }
     });
+    btnFinishTournament?.addEventListener("click", ()=>{
+      const mode = evaluation.data.terrainMode;
+      if(!mode?.enabled || !mode.started){
+        alert("Aucun tournoi en cours.");
+        return;
+      }
+      if(mode.finished){
+        alert("Le tournoi est déjà terminé.");
+        return;
+      }
+      if(window.confirm("Terminer le tournoi raquettes ?")){
+        finishTerrainChallenge();
+      }
+    });
+  }
+
+  function setupTerrainModeSelector(){
+    if(!terrainModeInputs.length) return;
+    updateTerrainModeSelector();
+    terrainModeInputs.forEach((input)=>{
+      input.addEventListener("change", ()=>{
+        if(!input.checked) return;
+        const nextMode = input.value === "double" ? "double" : "simple";
+        handleTerrainModeChange(nextMode);
+      });
+    });
+  }
+
+  function setupDoubleModeActions(){
+    if(!doubleModeTools) return;
+    btnRandomizeTeams?.addEventListener("click", ()=>{
+      if(isTerrainLocked()){
+        alert("Défi en cours : réinitialise le défi pour modifier les binômes.");
+        return;
+      }
+      if(!isDoubleModeActive()){
+        alert("Sélectionne le mode double pour créer des binômes.");
+        return;
+      }
+      randomizeDoubleTeams();
+    });
+    btnClearTeams?.addEventListener("click", ()=>{
+      if(isTerrainLocked()){
+        alert("Défi en cours : réinitialise le défi pour modifier les binômes.");
+        return;
+      }
+      if(!isDoubleModeActive()){
+        alert("Passe en mode double pour gérer les binômes.");
+        return;
+      }
+      if(window.confirm("Supprimer tous les binômes enregistrés ?")){
+        clearDoubleTeams();
+      }
+    });
+    btnAddManualTeam?.addEventListener("click", handleManualTeamCreation);
+    doubleTeamsPreview?.addEventListener("click", handleDoubleTeamsPreviewClick);
+  }
+
+  function handleTerrainModeChange(nextMode){
+    const mode = evaluation.data.terrainMode;
+    if(!mode) return;
+    if(nextMode === mode.mode) return;
+    if(isTerrainLocked()){
+      alert("Défi en cours : impossible de changer de mode avant réinitialisation.");
+      updateTerrainModeSelector();
+      return;
+    }
+    mode.mode = nextMode === "double" ? "double" : "simple";
+    if(mode.mode === "simple"){
+      mode.teams = [];
+    }else{
+      mode.teams = window.EPSMatrix.normalizeTerrainTeams(mode.teams, evaluation.data.students);
+      syncStudentsWithTeams();
+    }
+    persist();
+    render();
+  }
+
+  function updateTerrainModeSelector(){
+    const current = isDoubleModeActive() ? "double" : "simple";
+    terrainModeInputs.forEach((input)=>{
+      input.checked = input.value === current;
+      input.disabled = isTerrainLocked() && input.value !== current;
+    });
+    doubleModeTools?.classList.toggle("hidden", current !== "double");
+  }
+
+  function renderDoubleModePanel(){
+    if(!doubleModeTools) return;
+    if(!isDoubleModeActive()){
+      doubleModeTools.classList.add("hidden");
+      return;
+    }
+    doubleModeTools.classList.remove("hidden");
+    updateDoubleSelectOptions();
+    renderDoubleTeamsPreview();
+    updateDoubleModeAlert();
+  }
+
+  function randomizeDoubleTeams(){
+    const mode = evaluation.data.terrainMode;
+    const pool = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense);
+    shuffleStudents(pool);
+    const teams = [];
+    for(let i=0;i<pool.length;i+=2){
+      const first = pool[i];
+      const second = pool[i+1];
+      if(first && second){
+        teams.push(window.EPSMatrix.createDefaultTerrainTeam([first.id, second.id]));
+      }
+    }
+    if(!teams.length){
+      alert("Pas assez d'élèves présents pour créer un binôme.");
+      return;
+    }
+    mode.teams = teams;
+    syncStudentsWithTeams();
+    persist();
+    setTerrainInfoMessage("Binômes aléatoires générés.");
+    render();
+  }
+
+  function clearDoubleTeams(){
+    const mode = evaluation.data.terrainMode;
+    mode.teams = [];
+    evaluation.data.students.forEach((stu)=>{
+      if(stu.dispense || stu.absent) return;
+      stu.groupTag = "";
+    });
+    persist();
+    render();
+  }
+
+  function handleManualTeamCreation(){
+    if(!isDoubleModeActive()){
+      alert("Passe en mode double pour créer des binômes.");
+      return;
+    }
+    if(isTerrainLocked()){
+      alert("Défi en cours : réinitialise avant de modifier les binômes.");
+      return;
+    }
+    const idA = doubleSelectA?.value || "";
+    const idB = doubleSelectB?.value || "";
+    if(!idA || !idB){
+      alert("Sélectionne deux élèves disponibles.");
+      return;
+    }
+    if(idA === idB){
+      alert("Un binôme doit être composé de deux élèves différents.");
+      return;
+    }
+    const alreadyUsed = getDoubleTeams().some((team)=>team.playerIds.includes(idA) || team.playerIds.includes(idB));
+    if(alreadyUsed){
+      alert("Un des élèves est déjà dans un binôme.");
+      return;
+    }
+    const mode = evaluation.data.terrainMode;
+    mode.teams.push(window.EPSMatrix.createDefaultTerrainTeam([idA, idB]));
+    if(doubleSelectA) doubleSelectA.value = "";
+    if(doubleSelectB) doubleSelectB.value = "";
+    syncStudentsWithTeams();
+    persist();
+    render();
+  }
+
+  function handleDoubleTeamsPreviewClick(event){
+    const target = event.target instanceof Element ? event.target : null;
+    if(!target) return;
+    const removeBtn = target.closest("[data-team-action='remove']");
+    if(!removeBtn) return;
+    if(isTerrainLocked()){
+      alert("Défi en cours : réinitialise avant de modifier les binômes.");
+      return;
+    }
+    const teamId = removeBtn.dataset.team;
+    if(teamId){
+      removeDoubleTeam(teamId);
+    }
+  }
+
+  function removeDoubleTeam(teamId){
+    const mode = evaluation.data.terrainMode;
+    mode.teams = getDoubleTeams().filter((team)=>team.id !== teamId);
+    syncStudentsWithTeams();
+    persist();
+    render();
+  }
+
+  function updateDoubleSelectOptions(){
+    if(!doubleSelectA || !doubleSelectB) return;
+    const available = getStudentsWithoutTeam();
+    const options = ['<option value="">Élève disponible</option>'].concat(available.map((stu)=>`<option value="${stu.id}">${escapeHtml(stu.name)}</option>`)).join("");
+    doubleSelectA.innerHTML = options;
+    doubleSelectB.innerHTML = options;
+  }
+
+  function renderDoubleTeamsPreview(){
+    if(!doubleTeamsPreview) return;
+    const teams = getDoubleTeams();
+    if(!teams.length){
+      doubleTeamsPreview.innerHTML = '<p class="muted smallText">Aucun binôme créé pour le moment.</p>';
+      return;
+    }
+    doubleTeamsPreview.innerHTML = teams.map((team)=>`<article class="doubleTeamCard" data-team="${team.id}">
+      <div>
+        <strong>${formatTeamLabel(team)}</strong>
+        <p class="terrainLabel">${formatTeamGroupLabel(team)}</p>
+      </div>
+      <button class="iconButton" type="button" data-team-action="remove" data-team="${team.id}" title="Supprimer ce binôme">&times;</button>
+    </article>`).join("");
+  }
+
+  function updateDoubleModeAlert(){
+    if(!doubleModeAlert) return;
+    if(!isDoubleModeActive()){
+      doubleModeAlert.textContent = "";
+      return;
+    }
+    const waiting = getStudentsWithoutTeam();
+    if(waiting.length){
+      const names = waiting.map((stu)=>stu.name).join(", ");
+      doubleModeAlert.innerHTML = `${waiting.length} élève${waiting.length>1?"s":""} en attente : ${escapeHtml(names)}.`;
+    }else{
+      doubleModeAlert.textContent = "";
+    }
+  }
+
+  function formatTeamGroupLabel(team){
+    const idx = window.EPSMatrix.parseGroupIndex(team?.groupTag);
+    return idx ? `Terrain ${idx}` : "Aucun terrain";
   }
 
   function setupRopeModeEvents(){
@@ -2109,11 +2430,13 @@
     if(mode.enabled === next) return;
     mode.enabled = next;
     if(next){
+      mode.finished = false;
       enforceSingleRefEverywhere();
       ensureCurrentRound();
     }else{
       mode.started = false;
       mode.locked = false;
+      mode.finished = false;
       mode.startOrder = [];
       mode.currentRound = 1;
       mode.rounds = [];
@@ -2163,14 +2486,28 @@ function assignGroupsRoundRobin(count){
 
   function openRankingModal(){
     if(!rankingModal) return;
-    rankingDraft = evaluation.data.students
-      .filter((stu)=>!stu.absent && !stu.dispense)
-      .map((stu)=>({
-        id: stu.id,
-        name: stu.name,
-        groupTag: formatGroupValueLabel(stu.groupTag)
-      }))
-      .sort((a, b)=>a.name.localeCompare(b.name, "fr"));
+    if(isDoubleModeActive()){
+      const teams = getDoubleTeams();
+      if(!teams.length){
+        alert("Crée des binômes avant de configurer les terrains.");
+        return;
+      }
+      rankingDraft = teams.map((team)=>({
+        id: team.id,
+        name: formatTeamLabel(team),
+        sortName: getTeamPlainLabel(team),
+        groupTag: formatGroupValueLabel(team.groupTag)
+      })).sort((a, b)=>(a.sortName || "").localeCompare(b.sortName || "", "fr"));
+    }else{
+      rankingDraft = evaluation.data.students
+        .filter((stu)=>!stu.absent && !stu.dispense)
+        .map((stu)=>({
+          id: stu.id,
+          name: stu.name,
+          groupTag: formatGroupValueLabel(stu.groupTag)
+        }))
+        .sort((a, b)=>a.name.localeCompare(b.name, "fr"));
+    }
     renderRankingDraft();
     rankingModal.classList.remove("hidden");
     rankingModal.setAttribute("aria-hidden", "false");
@@ -2217,15 +2554,34 @@ function assignGroupsRoundRobin(count){
       alert("Défi en cours : réinitialise le défi pour modifier le classement.");
       return;
     }
-    rankingDraft.forEach((entry)=>{
-      const student = evaluation.data.students.find((stu)=>stu.id === entry.id);
-      if(!student) return;
-      if(entry.groupTag){
-        setStudentGroup(student, entry.groupTag);
-      }else{
-        student.groupTag = "";
-      }
-    });
+    if(isDoubleModeActive()){
+      rankingDraft.forEach((entry)=>{
+        const team = getTeamById(entry.id);
+        if(!team) return;
+        if(entry.groupTag){
+          setTeamGroup(team, entry.groupTag);
+        }else{
+          team.groupTag = "";
+          (team.playerIds || []).forEach((studentId)=>{
+            const student = getStudentById(studentId);
+            if(student){
+              student.groupTag = "";
+            }
+          });
+        }
+      });
+      syncStudentsWithTeams();
+    }else{
+      rankingDraft.forEach((entry)=>{
+        const student = evaluation.data.students.find((stu)=>stu.id === entry.id);
+        if(!student) return;
+        if(entry.groupTag){
+          setStudentGroup(student, entry.groupTag);
+        }else{
+          student.groupTag = "";
+        }
+      });
+    }
     persist();
     setTerrainInfoMessage("Classement mis à jour.");
     closeRankingModal();
@@ -2233,6 +2589,26 @@ function assignGroupsRoundRobin(count){
   }
 
   function randomizeRanking(){
+    if(isDoubleModeActive()){
+      const mode = evaluation.data.terrainMode;
+      const teams = getDoubleTeams();
+      if(!teams.length){
+        alert("Crée des binômes avant la répartition.");
+        return;
+      }
+      const count = clampTerrainCountInput(terrainCountInput?.value || mode.terrainCount);
+      mode.terrainCount = count;
+      shuffleStudents(teams);
+      teams.forEach((team, idx)=>{
+        const target = (idx % count) + 1;
+        setTeamGroup(team, target);
+      });
+      syncStudentsWithTeams();
+      persist();
+      setTerrainInfoMessage("Répartition aléatoire appliquée aux binômes.");
+      render();
+      return;
+    }
     const mode = evaluation.data.terrainMode;
     const count = clampTerrainCountInput(terrainCountInput?.value || mode.terrainCount);
     mode.terrainCount = count;
@@ -2257,7 +2633,95 @@ function assignGroupsRoundRobin(count){
     }
   }
 
+  function isDoubleModeActive(){
+    return evaluation.data.terrainMode?.mode === "double";
+  }
+
+  function getDoubleTeams(){
+    const mode = evaluation.data.terrainMode;
+    if(!Array.isArray(mode.teams)){
+      mode.teams = [];
+    }
+    return mode.teams;
+  }
+
+  function getTeamById(teamId){
+    if(!teamId) return null;
+    return getDoubleTeams().find((team)=>team.id === teamId) || null;
+  }
+
+  function getTeamPlainLabel(team){
+    if(!team) return "Binôme";
+    const members = (team.playerIds || []).map((studentId)=>{
+      const student = getStudentById(studentId);
+      return student ? student.name : null;
+    }).filter(Boolean);
+    if(!members.length) return "Binôme";
+    if(members.length === 1) return members[0];
+    return `${members[0]} & ${members[1]}`;
+  }
+
+  function formatTeamLabel(team){
+    return escapeHtml(getTeamPlainLabel(team));
+  }
+
+  function getStudentsWithoutTeam(){
+    const mode = evaluation.data.terrainMode;
+    const pairedIds = new Set(getDoubleTeams().flatMap((team)=>team.playerIds));
+    return evaluation.data.students.filter((stu)=>{
+      if(stu.absent || stu.dispense) return false;
+      return !pairedIds.has(stu.id);
+    });
+  }
+
+  function getTeamsForGroup(index){
+    const parsed = window.EPSMatrix.parseGroupIndex(index);
+    const mode = evaluation.data.terrainMode;
+    if(!parsed || !Array.isArray(mode.teams)) return [];
+    return mode.teams.filter((team)=>window.EPSMatrix.parseGroupIndex(team.groupTag) === parsed);
+  }
+
+  function setTeamGroup(team, groupIndex){
+    if(!team) return;
+    const normalized = window.EPSMatrix.formatGroupTag ? window.EPSMatrix.formatGroupTag(groupIndex) : String(groupIndex || "");
+    team.groupTag = normalized || "";
+    if(!team.startGroupTag){
+      team.startGroupTag = normalized || "";
+    }
+    (team.playerIds || []).forEach((studentId)=>{
+      const student = getStudentById(studentId);
+      if(student){
+        setStudentGroup(student, normalized || "");
+      }
+    });
+  }
+
+  function syncStudentsWithTeams(){
+    if(!isDoubleModeActive()) return;
+    evaluation.data.students.forEach((stu)=>{
+      if(stu.absent || stu.dispense) return;
+      stu.groupTag = "";
+    });
+    getDoubleTeams().forEach((team)=>{
+      const normalized = window.EPSMatrix.formatGroupTag ? window.EPSMatrix.formatGroupTag(team.groupTag) : (team.groupTag || "");
+      (team.playerIds || []).forEach((studentId)=>{
+        const student = getStudentById(studentId);
+        if(student){
+          student.groupTag = normalized || "";
+          if(team.startGroupTag && !student.startGroupTag){
+            student.startGroupTag = team.startGroupTag;
+          }
+        }
+      });
+    });
+  }
+
   function hasCompleteRanking(){
+    if(isDoubleModeActive()){
+      const teams = getDoubleTeams();
+      if(teams.length < 2) return false;
+      return teams.every((team)=>Boolean(window.EPSMatrix.parseGroupIndex(team.groupTag)));
+    }
     const participants = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense);
     if(!participants.length) return false;
     return participants.every((stu)=>Boolean(window.EPSMatrix.parseGroupIndex(stu.groupTag)));
@@ -2265,6 +2729,30 @@ function assignGroupsRoundRobin(count){
 
   function isTerrainLocked(){
     return Boolean(evaluation.data.terrainMode?.locked);
+  }
+
+  function isTerrainChallengeFinished(){
+    return Boolean(evaluation.data.terrainMode?.finished);
+  }
+
+  function finishTerrainChallenge(){
+    const mode = evaluation.data.terrainMode;
+    if(!mode || mode.finished) return;
+    mode.started = false;
+    mode.locked = false;
+    mode.finished = true;
+    delete mode.undoLastRotation;
+    matchScoreDrafts.clear();
+    hideRotationReadyPopup();
+    setTerrainInfoMessage("Partie terminée.");
+    persist();
+    render();
+    if(resultsPanel){
+      requestAnimationFrame(()=>{
+        resultsPanel.classList.remove("hidden");
+        resultsPanel.scrollIntoView({behavior:"smooth", block:"start"});
+      });
+    }
   }
 
   function startTerrainChallenge(){
@@ -2277,6 +2765,14 @@ function assignGroupsRoundRobin(count){
       alert("Défi déjà lancé. Réinitialise si besoin de recommencer.");
       return;
     }
+    if(mode.finished){
+      alert("Réinitialise le défi pour lancer une nouvelle partie.");
+      return;
+    }
+    if(isDoubleModeActive() && !getDoubleTeams().length){
+      alert("Crée au moins un binôme pour lancer le défi double.");
+      return;
+    }
     if(!hasCompleteRanking()){
       updateTerrainAlertState(true);
       alert("Attribue un terrain à chaque élève avant de lancer le défi.");
@@ -2284,7 +2780,13 @@ function assignGroupsRoundRobin(count){
     }
     mode.started = true;
     mode.locked = true;
-    mode.startOrder = evaluation.data.students.map((stu)=>({id:stu.id, groupTag: stu.groupTag || ""}));
+    mode.finished = false;
+    if(isDoubleModeActive()){
+      syncStudentsWithTeams();
+      mode.startOrder = getDoubleTeams().map((team)=>({id:team.id, groupTag: team.groupTag || "", type:"team"}));
+    }else{
+      mode.startOrder = evaluation.data.students.map((stu)=>({id:stu.id, groupTag: stu.groupTag || "", type:"student"}));
+    }
     mode.currentRound = 1;
     mode.rounds = [];
     mode.matches = [];
@@ -2313,6 +2815,7 @@ function assignGroupsRoundRobin(count){
     restoreStartOrder(mode);
     mode.started = false;
     mode.locked = false;
+    mode.finished = false;
     mode.startOrder = [];
     mode.currentRound = 1;
     mode.rounds = [];
@@ -2328,16 +2831,45 @@ function assignGroupsRoundRobin(count){
 
   function restoreStartOrder(mode){
     if(!Array.isArray(mode?.startOrder) || !mode.startOrder.length) return;
-    const map = new Map(mode.startOrder.map((entry)=>[entry.id, entry.groupTag || ""]));
+    const studentMap = new Map();
+    const teamMap = new Map();
+    mode.startOrder.forEach((entry)=>{
+      if(!entry || !entry.id) return;
+      const normalized = entry.groupTag || "";
+      const isTeamEntry = entry.type === "team" || (isDoubleModeActive() && getTeamById(entry.id));
+      if(isTeamEntry){
+        teamMap.set(entry.id, normalized);
+      }else{
+        studentMap.set(entry.id, normalized);
+      }
+    });
     evaluation.data.students.forEach((stu)=>{
-      if(!map.has(stu.id)) return;
-      const tag = map.get(stu.id);
+      if(!studentMap.has(stu.id)) return;
+      const tag = studentMap.get(stu.id);
       if(tag){
         setStudentGroup(stu, tag);
       }else{
         stu.groupTag = "";
       }
     });
+    if(teamMap.size){
+      getDoubleTeams().forEach((team)=>{
+        if(!teamMap.has(team.id)) return;
+        const tag = teamMap.get(team.id);
+        if(tag){
+          setTeamGroup(team, tag);
+        }else{
+          team.groupTag = "";
+          (team.playerIds || []).forEach((studentId)=>{
+            const student = getStudentById(studentId);
+            if(student){
+              student.groupTag = "";
+            }
+          });
+        }
+      });
+      syncStudentsWithTeams();
+    }
   }
 
   function setTerrainInfoMessage(message){
@@ -2352,6 +2884,13 @@ function assignGroupsRoundRobin(count){
     const mode = evaluation.data.terrainMode;
     if(!mode?.enabled){
       terrainStatusEl.innerHTML = '<p class="muted">Active le mode terrain pour accéder au défi raquettes.</p>';
+      return;
+    }
+    if(isTerrainChallengeFinished()){
+      const info = terrainInfoMessage ? `<p class="muted">${escapeHtml(terrainInfoMessage)}</p>` : "";
+      terrainStatusEl.innerHTML = `<p class="terrainStep success"><strong>Partie terminée</strong></p>
+      <p class="muted">Le tournoi est terminé. Consulte le classement final ci-dessous ou réinitialise le défi pour recommencer.</p>
+      ${info}`;
       return;
     }
     if(mode.started){
@@ -2379,6 +2918,10 @@ function assignGroupsRoundRobin(count){
 
   function ensureCurrentRound(){
     const mode = evaluation.data.terrainMode;
+    if(mode?.finished){
+      mode.currentRound = Number(mode.currentRound || 1);
+      return;
+    }
     if(!mode?.started){
       mode.currentRound = 1;
       return;
@@ -2387,7 +2930,7 @@ function assignGroupsRoundRobin(count){
     mode.currentRound = roundNumber;
     let round = Array.isArray(mode.rounds) ? mode.rounds.find((entry)=>entry.round === roundNumber) : null;
     if(!round){
-      const nextRound = buildRound(roundNumber);
+      const nextRound = isDoubleModeActive() ? buildDoubleRound(roundNumber) : buildRound(roundNumber);
       if(nextRound){
         upsertRound(nextRound);
         persist();
@@ -2483,11 +3026,59 @@ function assignGroupsRoundRobin(count){
     };
   }
 
+  function buildDoubleRound(roundNumber){
+    const mode = evaluation.data.terrainMode;
+    const matches = [];
+    const entrantMap = mode.entrantRoundByStudentId || {};
+    const groups = getAllGroupIndexes();
+    groups.forEach((groupIndex)=>{
+      const roster = getTeamsForGroup(groupIndex).filter(Boolean);
+      if(roster.length < 2) return;
+      const firstTeam = pickTeamForMatch(roster, entrantMap, roundNumber);
+      const secondTeam = pickTeamForMatch(roster.filter((team)=>team.id !== firstTeam?.id), entrantMap, roundNumber, firstTeam?.id);
+      if(!firstTeam || !secondTeam){
+        console.warn("EPS Matrix – binôme introuvable pour la rotation double", {groupIndex});
+        return;
+      }
+      matches.push({
+        id: window.EPSMatrix.genId("match"),
+        groupIndex,
+        aId: firstTeam.id,
+        bId: secondTeam.id,
+        round: roundNumber,
+        refId: null,
+        scoreA: null,
+        scoreB: null,
+        status: "pending",
+        winnerId: null,
+        loserId: null,
+        winnerTeamId: null,
+        loserTeamId: null,
+        forfeitId: null,
+        forfeitEnabled: false
+      });
+    });
+    if(!matches.length) return null;
+    return {
+      round: roundNumber,
+      createdAt: new Date().toISOString(),
+      matches
+    };
+  }
+
   function pickPlayerForMatch(pool, entrantMap, roundNumber, excludeId){
     if(!pool || !pool.length) return null;
     const prioritized = pool.find((stu)=>entrantMap?.[stu.id] === roundNumber && stu.id !== excludeId);
     if(prioritized) return prioritized;
     const fallback = pool.find((stu)=>stu.id !== excludeId);
+    return fallback || pool[0] || null;
+  }
+
+  function pickTeamForMatch(pool, entrantMap, roundNumber, excludeId){
+    if(!pool || !pool.length) return null;
+    const prioritized = pool.find((team)=>entrantMap?.[team.id] === roundNumber && team.id !== excludeId);
+    if(prioritized) return prioritized;
+    const fallback = pool.find((team)=>team.id !== excludeId);
     return fallback || pool[0] || null;
   }
 
@@ -2527,7 +3118,10 @@ function assignGroupsRoundRobin(count){
     if(!terrainPanel || !terrainGrid) return;
     const mode = evaluation.data.terrainMode;
     updateTerrainToggleButton();
+     updateTerrainModeSelector();
+     renderDoubleModePanel();
     const locked = isTerrainLocked();
+    const finished = isTerrainChallengeFinished();
     const canEditRanking = mode.enabled && !locked;
     const completeRanking = hasCompleteRanking();
     if(terrainCountInput){
@@ -2541,13 +3135,14 @@ function assignGroupsRoundRobin(count){
       btnRandomizeRanking.disabled = !canEditRanking;
     }
     if(btnStartChallenge){
-      btnStartChallenge.disabled = !mode.enabled || locked || !completeRanking;
+      btnStartChallenge.disabled = !mode.enabled || locked || !completeRanking || finished;
     }
     if(btnResetChallenge){
-      btnResetChallenge.disabled = !mode.enabled || !mode.started;
+      btnResetChallenge.disabled = !mode.enabled || (!mode.started && !finished);
     }
     updateTerrainStatusBlock();
-    updateTerrainAlertState(mode.enabled && !locked && !completeRanking);
+    updateTerrainAlertState(mode.enabled && !locked && !completeRanking && !finished);
+    updateFinishTournamentButton();
     if(!mode.enabled){
       terrainGrid.innerHTML = "";
       terrainDisabledHint?.classList.remove("hidden");
@@ -2559,13 +3154,24 @@ function assignGroupsRoundRobin(count){
     const cards = [];
     const groups = buildTerrainGroups();
     groups.forEach((group)=>{ cards.push(buildTerrainCard(group)); });
-    const ungrouped = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense && !window.EPSMatrix.parseGroupIndex(stu.groupTag));
-    if(ungrouped.length){
-      cards.push(buildListCard("À affecter", ungrouped, "warning"));
-    }
-    const off = evaluation.data.students.filter((stu)=>stu.absent || stu.dispense);
-    if(off.length){
-      cards.push(buildListCard("Hors terrain (ABS/DISP)", off, "muted"));
+    if(isDoubleModeActive()){
+      const unassignedTeams = getDoubleTeams().filter((team)=>!window.EPSMatrix.parseGroupIndex(team.groupTag));
+      if(unassignedTeams.length){
+        cards.push(buildTeamListCard("Binômes à affecter", unassignedTeams, "warning"));
+      }
+      const waitingStudents = getStudentsWithoutTeam();
+      if(waitingStudents.length){
+        cards.push(buildListCard("Élèves sans binôme", waitingStudents, "warning"));
+      }
+    }else{
+      const ungrouped = evaluation.data.students.filter((stu)=>!stu.absent && !stu.dispense && !window.EPSMatrix.parseGroupIndex(stu.groupTag));
+      if(ungrouped.length){
+        cards.push(buildListCard("À affecter", ungrouped, "warning"));
+      }
+      const off = evaluation.data.students.filter((stu)=>stu.absent || stu.dispense);
+      if(off.length){
+        cards.push(buildListCard("Hors terrain (ABS/DISP)", off, "muted"));
+      }
     }
     terrainGrid.innerHTML = cards.join("");
     renderMatchesList(mode.matches || []);
@@ -3148,6 +3754,18 @@ function assignGroupsRoundRobin(count){
 
   function buildTerrainGroups(){
     const indexes = getAllGroupIndexes();
+    if(isDoubleModeActive()){
+      return indexes.map((index)=>{
+        const teams = getTeamsForGroup(index);
+        const members = teams.flatMap((team)=>team.playerIds || []).map((studentId)=>getStudentById(studentId)).filter(Boolean);
+        return {
+          index,
+          label: formatGroupLabel(index),
+          teams,
+          students: members
+        };
+      });
+    }
     return indexes.map((index)=>({
       index,
       label: formatGroupLabel(index),
@@ -3160,10 +3778,17 @@ function assignGroupsRoundRobin(count){
 
   function getAllGroupIndexes(){
     const set = new Set();
-    evaluation.data.students.forEach((stu)=>{
-      const parsed = window.EPSMatrix.parseGroupIndex(stu.groupTag);
-      if(parsed) set.add(parsed);
-    });
+    if(isDoubleModeActive()){
+      getDoubleTeams().forEach((team)=>{
+        const parsed = window.EPSMatrix.parseGroupIndex(team.groupTag);
+        if(parsed) set.add(parsed);
+      });
+    }else{
+      evaluation.data.students.forEach((stu)=>{
+        const parsed = window.EPSMatrix.parseGroupIndex(stu.groupTag);
+        if(parsed) set.add(parsed);
+      });
+    }
     if(!set.size){
       const fallback = evaluation.data.terrainMode?.terrainCount || DEFAULT_TERRAIN_COUNT;
       for(let i=1;i<=fallback;i++){ set.add(i); }
@@ -3187,6 +3812,9 @@ function assignGroupsRoundRobin(count){
   }
 
   function buildTerrainCard(group){
+    if(isDoubleModeActive()){
+      return buildTeamTerrainCard(group);
+    }
     const ref = group.students.find((stu)=>stu.role === "ref");
     const players = group.students.slice().sort((a,b)=>a.name.localeCompare(b.name,"fr"));
     const studentList = players.length ? players.map((stu)=>{
@@ -3219,6 +3847,33 @@ function assignGroupsRoundRobin(count){
     </article>`;
   }
 
+  function buildTeamTerrainCard(group){
+    const teams = group.teams || [];
+    const teamList = teams.length ? teams.map((team)=>{
+      const startInfo = formatStartBadge(team.startGroupTag);
+      const names = formatTeamLabel(team);
+      return `<li class="terrainStudent double" data-team="${team.id}">
+        <div>
+          <strong>${names}</strong>
+          <span class="terrainStudentMeta">${startInfo}</span>
+        </div>
+      </li>`;
+    }).join("") : `<p class="muted smallText">Aucun binôme affecté.</p>`;
+    const terrainHeading = group.label ? `Terrain ${group.label}` : "Terrain —";
+    const started = Boolean(evaluation.data.terrainMode?.started);
+    const scoreBtnDisabled = started ? "" : "disabled";
+    return `<article class="terrainCard" data-group="${group.index}">
+      <header>
+        <div>
+          <h3>${terrainHeading}</h3>
+          <p class="terrainLabel">Binômes : ${teams.length}</p>
+        </div>
+        <button class="btn secondary" type="button" data-action="focus-score" data-group="${group.index}" ${scoreBtnDisabled}>Saisir score</button>
+      </header>
+      <ul class="terrainStudentList">${teamList}</ul>
+    </article>`;
+  }
+
   function buildListCard(title, students, tone){
     const entries = students.map((stu)=>{
       const reason = stu.absent ? "ABS" : (stu.dispense ? "DISP" : "");
@@ -3227,6 +3882,16 @@ function assignGroupsRoundRobin(count){
     return `<article class="terrainCard compact">
       <header><h3>${title}</h3></header>
       <ul class="terrainList">${entries || '<li class="muted">Aucun élève.</li>'}</ul>
+    </article>`;
+  }
+
+  function buildTeamListCard(title, teams, tone){
+    const entries = teams.map((team)=>{
+      return `<li>${formatTeamLabel(team)}</li>`;
+    }).join("");
+    return `<article class="terrainCard compact">
+      <header><h3>${title}</h3></header>
+      <ul class="terrainList ${tone||""}">${entries || '<li class="muted">Aucun binôme.</li>'}</ul>
     </article>`;
   }
 
@@ -3276,6 +3941,7 @@ function assignGroupsRoundRobin(count){
     if(!isTerrainPanelVisible()){
       rotationPanel.classList.add("hidden");
       hideRotationReadyPopup();
+      updateFinishTournamentButton();
       return;
     }
     const mode = evaluation.data.terrainMode;
@@ -3286,6 +3952,15 @@ function assignGroupsRoundRobin(count){
       }
       btnNextRotation?.setAttribute("disabled","disabled");
       btnUndoRotation?.setAttribute("disabled","disabled");
+      updateFinishTournamentButton();
+      return;
+    }
+    if(isTerrainChallengeFinished()){
+      rotationPanel.classList.add("hidden");
+      btnNextRotation?.setAttribute("disabled","disabled");
+      btnUndoRotation?.setAttribute("disabled","disabled");
+      hideRotationReadyPopup();
+      updateFinishTournamentButton();
       return;
     }
     rotationPanel.classList.remove("hidden");
@@ -3306,10 +3981,16 @@ function assignGroupsRoundRobin(count){
     rotationMatchesEl.innerHTML = cards;
     updateRotationCta(round);
     updateUndoButton();
+    updateFinishTournamentButton();
   }
 
   function updateRotationCta(round){
     if(!btnNextRotation) return;
+    if(isTerrainChallengeFinished()){
+      btnNextRotation.setAttribute("disabled","disabled");
+      updateRotationReadyPopup(false);
+      return;
+    }
     if(!round || !round.matches?.length){
       btnNextRotation.setAttribute("disabled","disabled");
       updateRotationReadyPopup(false);
@@ -3326,10 +4007,22 @@ function assignGroupsRoundRobin(count){
   function updateUndoButton(){
     if(!btnUndoRotation) return;
     const mode = evaluation.data.terrainMode;
+    if(isTerrainChallengeFinished()){
+      btnUndoRotation.setAttribute("disabled","disabled");
+      return;
+    }
     const snapshotAvailable = Boolean(mode?.undoLastRotation);
     const currentRound = mode?.currentRound || 1;
     const disabled = !snapshotAvailable || currentRound <= 1;
     btnUndoRotation.toggleAttribute("disabled", disabled);
+  }
+
+  function updateFinishTournamentButton(){
+    if(!btnFinishTournament) return;
+    const mode = evaluation.data.terrainMode;
+    const visible = Boolean(mode?.enabled && mode.started && !mode.finished);
+    btnFinishTournament.classList.toggle("hidden", !visible);
+    btnFinishTournament.toggleAttribute("disabled", !visible);
   }
 
   function isMatchLocked(match){
@@ -3371,11 +4064,11 @@ function assignGroupsRoundRobin(count){
   }
 
   function rotationMatchCard(match){
-    const playerA = evaluation.data.students.find((stu)=>stu.id === match.aId);
-    const playerB = evaluation.data.students.find((stu)=>stu.id === match.bId);
+    const playerA = getParticipantById(match.aId);
+    const playerB = getParticipantById(match.bId);
     const ref = evaluation.data.students.find((stu)=>stu.id === match.refId);
-    const nameA = playerA ? escapeHtml(playerA.name) : "—";
-    const nameB = playerB ? escapeHtml(playerB.name) : "—";
+    const nameA = formatParticipantName(playerA);
+    const nameB = formatParticipantName(playerB);
     const refLabel = ref ? `Arbitre : ${escapeHtml(ref.name)}` : "Aucun arbitre";
     const draft = ensureMatchDraft(match);
     const scoreAValue = draft?.scoreA ?? "";
@@ -3443,8 +4136,30 @@ function assignGroupsRoundRobin(count){
     return evaluation.data.students.find((stu)=>stu.id === id) || null;
   }
 
+  function getParticipantById(id){
+    if(!id) return null;
+    if(isDoubleModeActive()){
+      return getTeamById(id);
+    }
+    return getStudentById(id);
+  }
+
+  function formatParticipantName(participant){
+    if(!participant){
+      return "—";
+    }
+    if(isDoubleModeActive()){
+      return formatTeamLabel(participant);
+    }
+    return escapeHtml(participant.name);
+  }
+
   function findStudentName(id){
     if(!id) return "—";
+    if(isDoubleModeActive()){
+      const team = getTeamById(id);
+      if(team) return formatTeamLabel(team);
+    }
     const student = getStudentById(id);
     return student ? escapeHtml(student.name) : "—";
   }
@@ -3562,6 +4277,18 @@ function assignGroupsRoundRobin(count){
     window.EPSMatrix.ensureTerrainStudentFields(loser);
   }
 
+  function applyDoubleMatchResult({groupIndex, winnerTeam, loserTeam}){
+    if(!winnerTeam || !loserTeam) return;
+    const currentIndex = groupIndex || window.EPSMatrix.parseGroupIndex(winnerTeam.groupTag) || 1;
+    const upIndex = currentIndex > 1 ? currentIndex - 1 : 1;
+    const maxIndex = Math.max(getMaxGroupIndex(), evaluation.data.terrainMode?.terrainCount || currentIndex);
+    let downIndex = currentIndex < maxIndex ? currentIndex + 1 : maxIndex;
+    downIndex = Math.min(downIndex, MAX_TERRAINS);
+    setTeamGroup(winnerTeam, upIndex);
+    setTeamGroup(loserTeam, downIndex);
+    syncStudentsWithTeams();
+  }
+
   function openPlayerModal(studentId){
     if(!playerModal) return;
     const student = evaluation.data.students.find((stu)=>stu.id === studentId);
@@ -3625,6 +4352,16 @@ function assignGroupsRoundRobin(count){
       return;
     }
     resultsPanel.classList.remove("hidden");
+    if(resultsTitle){
+      resultsTitle.textContent = isTerrainChallengeFinished() ? "Classement final" : "Mode terrain – Résultats";
+    }
+    if(isDoubleModeActive()){
+      renderDoubleResultsTable(mode);
+      return;
+    }
+    if(resultsNameHeader) resultsNameHeader.textContent = "Élève";
+    if(resultsStartHeader) resultsStartHeader.textContent = "Départ";
+    if(resultsCurrentHeader) resultsCurrentHeader.textContent = "Terrain actuel";
     const standings = window.EPSMatrix.computeStandingsFromMatches(mode.matches || [], evaluation.data.students);
     const {activeRows, offRows} = buildRankingRows(standings);
     const rows = activeRows.concat(offRows);
@@ -3633,6 +4370,26 @@ function assignGroupsRoundRobin(count){
       return `<tr data-student="${entry.id}"${rowClass}>
         <td>${entry.rank ?? "—"}</td>
         <td>${escapeHtml(entry.name)}</td>
+        <td>${entry.startLabel}</td>
+        <td>${entry.currentLabel}</td>
+        <td>${entry.stats.played}</td>
+        <td>${entry.stats.wins}</td>
+        <td>${entry.stats.losses}</td>
+        <td>${entry.stats.points}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderDoubleResultsTable(mode){
+    const standings = window.EPSMatrix.computeTeamStandingsFromMatches(mode.matches || [], getDoubleTeams());
+    const {activeRows} = buildTeamRankingRows(standings);
+    if(resultsNameHeader) resultsNameHeader.textContent = "Binôme";
+    if(resultsStartHeader) resultsStartHeader.textContent = "Départ binôme";
+    if(resultsCurrentHeader) resultsCurrentHeader.textContent = "Terrain actuel";
+    resultsBody.innerHTML = activeRows.map((entry)=>{
+      return `<tr data-student="${entry.id}">
+        <td>${entry.rank ?? "—"}</td>
+        <td>${entry.name}</td>
         <td>${entry.startLabel}</td>
         <td>${entry.currentLabel}</td>
         <td>${entry.stats.played}</td>
@@ -3678,6 +4435,35 @@ function assignGroupsRoundRobin(count){
     return {activeRows: active, offRows: off};
   }
 
+  function buildTeamRankingRows(standings){
+    const active = [];
+    getDoubleTeams().forEach((team)=>{
+      const stats = standings.get(team.id) || {played:0,wins:0,losses:0,points:0};
+      const currentIndex = window.EPSMatrix.parseGroupIndex(team.groupTag) || 999;
+      const startIndex = window.EPSMatrix.parseGroupIndex(team.startGroupTag);
+      const plainName = getTeamPlainLabel(team);
+      active.push({
+        id: team.id,
+        name: formatTeamLabel(team),
+        sortName: plainName,
+        stats,
+        currentIndex,
+        startIndex,
+        currentLabel: formatGroupDisplay(currentIndex),
+        startLabel: formatGroupDisplay(startIndex),
+        rowClass: ""
+      });
+    });
+    active.sort((a, b)=>{
+      if(b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
+      if(b.stats.wins !== a.stats.wins) return b.stats.wins - a.stats.wins;
+      if(a.currentIndex !== b.currentIndex) return a.currentIndex - b.currentIndex;
+      return (a.sortName || "").localeCompare(b.sortName || "", "fr");
+    });
+    active.forEach((row, idx)=>{ row.rank = idx + 1; });
+    return {activeRows: active, offRows: []};
+  }
+
   function formatGroupDisplay(index, student){
     if(!index || index === 999){
       if(student?.absent) return "ABS";
@@ -3690,6 +4476,27 @@ function assignGroupsRoundRobin(count){
   function exportResultsCsv(){
     if(!evaluation.data.terrainMode?.enabled){
       alert("Active le mode terrain pour exporter les résultats.");
+      return;
+    }
+    if(isDoubleModeActive()){
+      const standings = window.EPSMatrix.computeTeamStandingsFromMatches(evaluation.data.terrainMode.matches || [], getDoubleTeams());
+      const ranking = buildTeamRankingRows(standings);
+      const rows = ranking.activeRows;
+      const header = ["team_id","binome","startTerrain","currentTerrain","played","wins","losses","points","rank"];
+      const csvRows = rows.map((row)=>[
+        row.id,
+        row.name,
+        row.startLabel,
+        row.currentLabel,
+        row.stats.played,
+        row.stats.wins,
+        row.stats.losses,
+        row.stats.points,
+        row.rank ?? ""
+      ]);
+      const csv = [header, ...csvRows].map((line)=>line.map((cell)=>`"${String(cell ?? "").replace(/"/g,'""')}"`).join(",")).join("\n");
+      const filename = `EPSMatrix_resultats_binomes_${window.EPSMatrix.sanitizeFileName(evaluation.activity)}_${new Date().toISOString().slice(0,10)}.csv`;
+      downloadFile(filename, csv, "text/csv");
       return;
     }
     const standings = window.EPSMatrix.computeStandingsFromMatches(evaluation.data.terrainMode.matches || [], evaluation.data.students);
@@ -3721,6 +4528,10 @@ function assignGroupsRoundRobin(count){
 
   function openStudentSummary(studentId){
     if(!studentSummaryModal) return;
+    if(isDoubleModeActive()){
+      alert("Le résumé individuel est disponible uniquement en mode simple.");
+      return;
+    }
     const student = evaluation.data.students.find((stu)=>stu.id === studentId);
     if(!student){
       alert("Élève introuvable.");
@@ -3775,6 +4586,7 @@ function assignGroupsRoundRobin(count){
   function handleResultsClick(event){
     const row = event.target.closest("tr[data-student]");
     if(!row || !evaluation.data.terrainMode?.enabled) return;
+    if(isDoubleModeActive()) return;
     const studentId = row.dataset.student;
     if(!studentId) return;
     openStudentSummary(studentId);

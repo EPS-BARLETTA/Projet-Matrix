@@ -43,6 +43,19 @@
               <button class="btn secondary" type="button" id="btnToggleTerrainMode">Activer le mode terrain</button>
               <p class="muted smallText" id="terrainModeHint">Les terrains utilisent les groupes (G1 = Terrain 1).</p>
             </div>
+            <div class="terrainModeSelector" id="terrainModeSelector">
+              <p class="muted tinyCaps">Type de défi</p>
+              <div class="modeSelectorChips">
+                <label class="chipOption">
+                  <input type="radio" name="terrainModeType" value="simple" checked />
+                  <span>Simple</span>
+                </label>
+                <label class="chipOption">
+                  <input type="radio" name="terrainModeType" value="double" />
+                  <span>Double</span>
+                </label>
+              </div>
+            </div>
             <div class="terrainConfig">
               <label>Nombre de terrains
                 <input type="number" id="terrainCountInput" min="1" max="20" value="4" />
@@ -53,6 +66,23 @@
                 <button class="btn primary" type="button" id="btnStartChallenge">Lancer le défi</button>
                 <button class="btn secondary danger" type="button" id="btnResetChallenge">Réinitialiser le défi</button>
               </div>
+            </div>
+            <div class="doubleModeTools hidden" id="doubleModeTools">
+              <div class="doubleModeActions">
+                <button class="btn secondary" type="button" id="btnRandomizeTeams">Binômes aléatoires</button>
+                <button class="btn secondary" type="button" id="btnClearTeams">Vider les binômes</button>
+              </div>
+              <div class="doubleManualBuilder">
+                <p class="muted tinyCaps">Créer un binôme manuel</p>
+                <div class="doubleManualRow">
+                  <select id="doubleSelectA"></select>
+                  <select id="doubleSelectB"></select>
+                  <button class="btn primary" type="button" id="btnAddManualTeam">Ajouter</button>
+                </div>
+                <p class="muted smallText" id="doubleManualHint">Sélectionne deux élèves disponibles pour former un binôme fixe.</p>
+              </div>
+              <div class="doubleTeamsPreview" id="doubleTeamsPreview"></div>
+              <p class="muted smallText" id="doubleModeAlert"></p>
             </div>
             <div class="terrainStatusBlock" id="terrainStatus"></div>
             <p class="terrainAlert hidden" id="terrainAlert">Attribue un terrain à chaque élève ou utilise “Répartition aléatoire”.</p>
@@ -106,9 +136,9 @@
           <thead>
             <tr>
               <th>Rang</th>
-              <th>Élève</th>
-              <th>Départ</th>
-              <th>Terrain actuel</th>
+              <th id="resultsNameHeader">Élève</th>
+              <th id="resultsStartHeader">Départ</th>
+              <th id="resultsCurrentHeader">Terrain actuel</th>
               <th>Matchs</th>
               <th>Gagnés</th>
               <th>Perdus</th>

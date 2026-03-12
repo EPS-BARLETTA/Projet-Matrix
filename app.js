@@ -485,12 +485,16 @@ window.EPSMatrix = {
   sanitizeFileName,
   clampTerrainCount,
   createDefaultTerrainMode,
+  createDefaultTerrainStats,
+  createDefaultTerrainTeam,
   ensureTerrainStudentFields,
   normalizeTerrainMode,
+  normalizeTerrainTeams,
   parseGroupIndex,
   formatGroupTag,
   normalizeGroupTag,
   computeStandingsFromMatches,
+  computeTeamStandingsFromMatches,
   ARCHIVE_VERSION,
   CURRENT_SCHEMA_VERSION
 };
@@ -552,6 +556,7 @@ function clampTerrainCount(value){
 function createDefaultTerrainMode(){
   return {
     enabled:false,
+    mode:"simple",
     terrainCount:DEFAULT_TERRAIN_COUNT,
     terrains:[],
     linkedToGroups:true,
@@ -561,12 +566,34 @@ function createDefaultTerrainMode(){
     entrantRoundByStudentId:{},
     started:false,
     locked:false,
-    startOrder:[]
+    startOrder:[],
+    teams:[]
   };
 }
 
 function createDefaultTerrainStats(){
   return {played:0, wins:0, losses:0, points:0};
+}
+
+function normalizeTerrainStats(stats){
+  const normalized = createDefaultTerrainStats();
+  if(stats && typeof stats === "object"){
+    normalized.played = Number(stats.played) || 0;
+    normalized.wins = Number(stats.wins) || 0;
+    normalized.losses = Number(stats.losses) || 0;
+    normalized.points = Number(stats.points) || 0;
+  }
+  return normalized;
+}
+
+function createDefaultTerrainTeam(playerIds){
+  return {
+    id: genId("team"),
+    playerIds: Array.isArray(playerIds) ? playerIds.slice(0, 2) : [],
+    startGroupTag:"",
+    groupTag:"",
+    stats: createDefaultTerrainStats()
+  };
 }
 
 function ensureTerrainStudentFields(student){
@@ -589,14 +616,26 @@ function ensureTerrainStudentFields(student){
   }
   if(student.role !== "ref"){ student.role = "player"; }
   if(typeof student.freeNote !== "string"){ student.freeNote = ""; }
-  if(!student.stats || typeof student.stats !== "object"){
-    student.stats = createDefaultTerrainStats();
-  }else{
-    student.stats.played = Number(student.stats.played) || 0;
-    student.stats.wins = Number(student.stats.wins) || 0;
-    student.stats.losses = Number(student.stats.losses) || 0;
-    student.stats.points = Number(student.stats.points) || 0;
-  }
+  student.stats = normalizeTerrainStats(student.stats);
+}
+
+function normalizeTerrainTeams(teams, students){
+  if(!Array.isArray(teams)) return [];
+  const validIds = new Set((students || []).map((stu)=>stu.id));
+  return teams.map((team)=>normalizeTerrainTeamEntry(team, validIds)).filter(Boolean);
+}
+
+function normalizeTerrainTeamEntry(team, validIds){
+  if(!team || typeof team !== "object") return null;
+  const playerIds = Array.isArray(team.playerIds) ? team.playerIds.filter((id)=>validIds.has(id)) : [];
+  if(playerIds.length < 2) return null;
+  return {
+    id: team.id || genId("team"),
+    playerIds,
+    startGroupTag: normalizeGroupTag(team.startGroupTag || ""),
+    groupTag: normalizeGroupTag(team.groupTag || ""),
+    stats: normalizeTerrainStats(team.stats)
+  };
 }
 
 function normalizeTerrainMode(rawMode, students){
@@ -604,6 +643,7 @@ function normalizeTerrainMode(rawMode, students){
   const mode = Object.assign({}, base, rawMode || {});
   mode.terrainCount = clampTerrainCount(mode.terrainCount || base.terrainCount);
   mode.linkedToGroups = true;
+  mode.mode = mode.mode === "double" ? "double" : "simple";
   mode.matches = normalizeTerrainMatches(mode.matches);
   mode.currentRound = Number.isInteger(mode.currentRound) && mode.currentRound > 0 ? mode.currentRound : 1;
   mode.rounds = Array.isArray(mode.rounds) ? mode.rounds.map(normalizeRound).filter(Boolean) : [];
@@ -616,6 +656,7 @@ function normalizeTerrainMode(rawMode, students){
   if(Array.isArray(students)){
     students.forEach(ensureTerrainStudentFields);
   }
+  mode.teams = normalizeTerrainTeams(mode.teams, students);
   return mode;
 }
 
@@ -734,6 +775,34 @@ function computeStandingsFromMatches(matches, students){
   studentIds.forEach((id)=>{
     if(!map.has(id)){
       map.set(id, {played:0,wins:0,losses:0,points:0});
+    }
+  });
+  return map;
+}
+
+function computeTeamStandingsFromMatches(matches, teams){
+  const map = new Map();
+  const teamIds = new Set((teams || []).map((team)=>team.id));
+  (matches || []).forEach((match)=>{
+    if(!match?.winnerTeamId || !match?.loserTeamId) return;
+    if(!map.has(match.winnerTeamId)){
+      map.set(match.winnerTeamId, createDefaultTerrainStats());
+    }
+    if(!map.has(match.loserTeamId)){
+      map.set(match.loserTeamId, createDefaultTerrainStats());
+    }
+    const winnerStats = map.get(match.winnerTeamId);
+    const loserStats = map.get(match.loserTeamId);
+    winnerStats.played += 1;
+    winnerStats.wins += 1;
+    winnerStats.points += 3;
+    loserStats.played += 1;
+    loserStats.losses += 1;
+    loserStats.points += 1;
+  });
+  teamIds.forEach((teamId)=>{
+    if(!map.has(teamId)){
+      map.set(teamId, createDefaultTerrainStats());
     }
   });
   return map;
